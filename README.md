@@ -6,6 +6,8 @@ Strix Halo XDNA NPU — built on top of
 [`amdgpu_top`](https://github.com/Umio-Yasuno/amdgpu_top)'s `libamdgpu_top`
 backend.
 
+![amdgpu-top-tui2 screenshot](docs/screenshot.png)
+
 > **This is an add-on for [`amdgpu_top`](https://github.com/Umio-Yasuno/amdgpu_top), not a standalone tool.**
 > All telemetry comes from `libamdgpu_top` (the same library that powers
 > `amdgpu_top`'s `--tui`, `--gui`, and `--json` frontends). Think of this as a
