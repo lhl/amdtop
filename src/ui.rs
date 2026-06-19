@@ -70,7 +70,7 @@ fn section_height(app: &App, s: Section) -> Constraint {
                 .iter()
                 .map(|a| a.stat.xdna_fdinfo.proc_usage.len())
                 .sum::<usize>();
-            4 + ctx.min(6) as u16
+            5 + ctx.min(6) as u16
         }
         Section::Processes => 3 + 10,
     };
@@ -552,36 +552,61 @@ fn draw_npu(f: &mut Frame, area: Rect, app: &mut App) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
+    let npu = app.npu_info.as_ref();
+    let fdinfo_supported = npu.is_some_and(|n| n.fdinfo_supported);
+
     if app.is_collapsed(Section::Npu) {
-        let npu_pct = app.hist_npu.buf_last() as f64;
-        let line = Line::from(vec![
+        let pct_span = if fdinfo_supported {
+            let npu_pct = app.hist_npu.buf_last() as f64;
             Span::styled(
                 format!(" {:>3}% ", npu_pct.round()),
                 Style::default().fg(app.theme.util_color(npu_pct, UtilKind::Npu)),
-            ),
-            Span::styled(format!("{} contexts  ", npu_ctx_count(app)), Style::default().fg(app.theme.graph_text())),
+            )
+        } else {
+            Span::styled(" N/A ", Style::default().fg(app.theme.inactive_fg()))
+        };
+        let status = if fdinfo_supported {
+            format!("{} contexts  ", npu_ctx_count(app))
+        } else {
+            "telemetry unavailable  ".to_string()
+        };
+        let line = Line::from(vec![
+            pct_span,
+            Span::styled(status, Style::default().fg(app.theme.graph_text())),
         ]);
         f.render_widget(Paragraph::new(line), inner);
         return;
     }
 
+    let top_table = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(4), Constraint::Min(0)])
+        .split(inner);
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(38), Constraint::Min(20)])
-        .split(inner);
+        .split(top_table[0]);
     let left = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Length(1), Constraint::Min(0)])
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
         .split(cols[0]);
 
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(" NPU ", Style::default().fg(app.theme.hi_fg()).add_modifier(Modifier::BOLD)),
-            Span::styled("XDNA", Style::default().fg(app.theme.title())),
+            Span::styled(
+                npu.map(|n| n.name.clone()).unwrap_or_else(|| "XDNA".to_string()),
+                Style::default().fg(app.theme.title()),
+            ),
         ])),
         left[0],
     );
-    let fw = app.apps.iter().find_map(|a| a.xdna_fw_version.clone()).unwrap_or_default();
+    let fw = npu.and_then(|n| n.fw_version.clone()).unwrap_or_else(|| "unknown".to_string());
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(" fw ", Style::default().fg(app.theme.graph_text())),
@@ -589,31 +614,57 @@ fn draw_npu(f: &mut Frame, area: Rect, app: &mut App) {
         ])),
         left[1],
     );
+    let bdf = npu.map(|n| n.bdf.clone()).unwrap_or_else(|| "unknown".to_string());
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(" bdf ", Style::default().fg(app.theme.graph_text())),
+            Span::styled(bdf, Style::default().fg(app.theme.proc_misc())),
+        ])),
+        left[2],
+    );
+    let telemetry = if fdinfo_supported {
+        "fdinfo telemetry"
+    } else {
+        "detected; fdinfo unavailable"
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            format!(" {telemetry}"),
+            Style::default().fg(app.theme.graph_text()),
+        ))),
+        left[3],
+    );
 
-    let npu_pct = app.hist_npu.buf_last() as f64;
+    let npu_pct = fdinfo_supported.then(|| app.hist_npu.buf_last() as f64);
     let right = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(1), Constraint::Length(2), Constraint::Min(0)])
         .split(cols[1]);
-    f.render_widget(Paragraph::new(gauge_line(app, "NPU", Some(npu_pct), cols[1].width as usize, Kind::Npu)), right[0]);
-    let graph = app.hist_npu.braille_graph(cols[1].width as usize, 2, app.theme.process());
-    let grows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Length(1)])
-        .split(right[1]);
-    for (gi, line) in graph.iter().enumerate() {
-        if gi < grows.len() {
-            f.render_widget(Paragraph::new(line.clone()), grows[gi]);
+    f.render_widget(
+        Paragraph::new(gauge_line(app, "NPU", npu_pct, cols[1].width as usize, Kind::Npu)),
+        right[0],
+    );
+    if fdinfo_supported {
+        let graph = app.hist_npu.braille_graph(cols[1].width as usize, 2, app.theme.process());
+        let grows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Length(1)])
+            .split(right[1]);
+        for (gi, line) in graph.iter().enumerate() {
+            if gi < grows.len() {
+                f.render_widget(Paragraph::new(line.clone()), grows[gi]);
+            }
         }
+    } else {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                " telemetry N/A",
+                Style::default().fg(app.theme.inactive_fg()),
+            ))),
+            right[1],
+        );
     }
 
-    // contexts table below
-    let table_area = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0)])
-        .split(inner)[1];
-    let header = Row::new(vec!["PID", "NAME", "CTX", "MEM", "NPU%"])
-        .style(Style::default().fg(app.theme.proc_misc()).add_modifier(Modifier::BOLD));
     let rows: Vec<Row> = app
         .apps
         .iter()
@@ -628,6 +679,22 @@ fn draw_npu(f: &mut Frame, area: Rect, app: &mut App) {
             ])
         })
         .collect();
+
+    if rows.is_empty() {
+        let msg = if fdinfo_supported {
+            " no active NPU contexts "
+        } else {
+            " NPU present; amdxdna fdinfo telemetry unavailable "
+        };
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(msg, Style::default().fg(app.theme.graph_text())))),
+            top_table[1],
+        );
+        return;
+    }
+
+    let header = Row::new(vec!["PID", "NAME", "CTX", "MEM", "NPU%"])
+        .style(Style::default().fg(app.theme.proc_misc()).add_modifier(Modifier::BOLD));
     let table = Table::new(
         rows,
         [
@@ -639,7 +706,7 @@ fn draw_npu(f: &mut Frame, area: Rect, app: &mut App) {
         ],
     )
     .header(header);
-    f.render_widget(table, table_area);
+    f.render_widget(table, top_table[1]);
 }
 
 fn npu_ctx_count(app: &App) -> usize {
