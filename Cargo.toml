@@ -1,6 +1,6 @@
 [package]
 name = "amdtop"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "A btop/nvitop-style system monitor for AMD GPUs, CPUs, and XDNA NPUs"
