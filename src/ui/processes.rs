@@ -31,7 +31,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     }
 
     let header = Row::new(vec![
-        "GPU", "PID", "NAME", "VRAM", "GTT", "GFX%", "COMP%", "DMA%", "CPU%",
+        "GPU", "PID", "NAME", "MEM", "VRAM", "GTT", "GFX%", "COMP%", "DMA%", "CPU%",
     ])
     .style(
         Style::default()
@@ -48,8 +48,9 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
                     gi.to_string(),
                     pu.pid.to_string(),
                     pu.name.chars().take(24).collect::<String>(),
-                    format!("{}M", pu.usage.vram_usage >> 10),
-                    format!("{}M", pu.usage.gtt_usage >> 10),
+                    fmt_kib(app.process_rss_kb(pu.pid)),
+                    fmt_kib(Some(pu.usage.vram_usage)),
+                    fmt_kib(Some(pu.usage.gtt_usage)),
                     pu.usage.gfx.to_string(),
                     pu.usage.compute.to_string(),
                     pu.usage.dma.to_string(),
@@ -66,6 +67,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             Constraint::Min(20),
             Constraint::Length(8),
             Constraint::Length(8),
+            Constraint::Length(8),
             Constraint::Length(6),
             Constraint::Length(7),
             Constraint::Length(6),
@@ -74,4 +76,30 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     )
     .header(header);
     f.render_widget(table, inner);
+}
+
+fn fmt_kib(kib: Option<u64>) -> String {
+    const KIB_PER_MIB: u64 = 1 << 10;
+    const KIB_PER_GIB: u64 = 1 << 20;
+
+    let Some(kib) = kib else {
+        return "-".to_string();
+    };
+    if kib >= KIB_PER_GIB {
+        format!("{:.1}G", kib as f64 / KIB_PER_GIB as f64)
+    } else {
+        format!("{}M", kib / KIB_PER_MIB)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fmt_kib;
+
+    #[test]
+    fn memory_columns_use_compact_binary_units() {
+        assert_eq!(fmt_kib(Some(512 << 10)), "512M");
+        assert_eq!(fmt_kib(Some(3 << 20)), "3.0G");
+        assert_eq!(fmt_kib(None), "-");
+    }
 }

@@ -27,7 +27,8 @@ layout.
 - **APU-aware memory**: shows the real GTT (unified system RAM) pool on APUs,
   VRAM on discrete cards — both labeled `MEM`
 - **XDNA NPU**: presence detection on `/sys/class/accel`; utilization + per-context table when the `amdxdna` driver exposes DRM fdinfo telemetry
-- **Process table**: per-process VRAM/GTT and engine usage via `fdinfo`
+- **Process table**: per-process resident system memory (`MEM`), VRAM/GTT,
+  and engine usage
 - **All [btop](https://github.com/aristocratos/btop) themes supported** — drops
   into the same `.theme` files; cycle live with `t`/`T`. Defaults to `onedark`.
 - nvitop-style fixed-track gauges with aligned numeric columns; braille area

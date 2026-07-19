@@ -1,5 +1,6 @@
 //! Application state: `libamdgpu_top` apps, samplers, history, and UI state.
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
@@ -32,6 +33,7 @@ pub struct App {
     pub apps: Vec<AppAmdgpuTop>,
     pub cpu: CpuSampler,
     pub mem: SystemMem,
+    process_rss_kb: HashMap<i32, u64>,
     pub collapse: CollapseState,
     pub section: Section,
     pub hist_cpu: History,
@@ -98,6 +100,7 @@ impl App {
             apps,
             cpu: CpuSampler::default(),
             mem: SystemMem::default(),
+            process_rss_kb: HashMap::new(),
             collapse,
             section: Section::Gpu,
             hist_cpu: History::new(HISTORY_CAPACITY),
@@ -155,6 +158,7 @@ impl App {
         for app in &mut self.apps {
             app.update(interval);
         }
+        self.sample_process_memory();
         self.cpu.tick();
         self.mem.tick();
 
@@ -187,6 +191,24 @@ impl App {
             .map(|process| process.usage.npu.max(0))
             .sum::<i64>();
         self.hist_npu.push(npu_sum.clamp(0, 100) as u64);
+    }
+
+    fn sample_process_memory(&mut self) {
+        let pids: HashSet<i32> = self
+            .apps
+            .iter()
+            .flat_map(|app| &app.stat.fdinfo.proc_usage)
+            .map(|process| process.pid)
+            .collect();
+
+        self.process_rss_kb = pids
+            .into_iter()
+            .filter_map(|pid| read_process_rss_kb(pid).map(|rss_kb| (pid, rss_kb)))
+            .collect();
+    }
+
+    pub fn process_rss_kb(&self, pid: i32) -> Option<u64> {
+        self.process_rss_kb.get(&pid).copied()
     }
 
     pub fn save_state(&self) -> std::io::Result<()> {
@@ -311,6 +333,22 @@ fn read_trim(path: impl AsRef<Path>) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+fn read_process_rss_kb(pid: i32) -> Option<u64> {
+    let status = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    parse_process_rss_kb(&status)
+}
+
+fn parse_process_rss_kb(status: &str) -> Option<u64> {
+    status.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+        if fields.next() != Some("VmRSS:") {
+            return None;
+        }
+        let rss_kb = fields.next()?.parse().ok()?;
+        (fields.next() == Some("kB")).then_some(rss_kb)
+    })
+}
+
 fn fdinfo_has_drm_driver(accel_path: &Path) -> bool {
     let Ok(file) = fs::OpenOptions::new()
         .read(true)
@@ -359,7 +397,7 @@ fn memory_info(is_apu: bool, vram: (u64, u64), gtt: (u64, u64)) -> MemInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::memory_info;
+    use super::{memory_info, parse_process_rss_kb};
 
     #[test]
     fn memory_info_selects_gtt_for_apus_and_vram_for_discrete_gpus() {
@@ -380,5 +418,15 @@ mod tests {
     fn memory_info_handles_zero_and_overcommitted_pools() {
         assert_eq!(memory_info(false, (10, 0), (0, 0)).percent, 0.0);
         assert_eq!(memory_info(false, (200, 100), (0, 0)).percent, 100.0);
+    }
+
+    #[test]
+    fn process_rss_parser_reads_resident_system_memory() {
+        let status = "Name:\ttest\nVmSize:\t4096 kB\nVmRSS:\t1536 kB\nThreads:\t2\n";
+
+        assert_eq!(parse_process_rss_kb(status), Some(1536));
+        assert_eq!(parse_process_rss_kb("VmRSS:\tinvalid kB\n"), None);
+        assert_eq!(parse_process_rss_kb("VmRSS:\t1536 MB\n"), None);
+        assert_eq!(parse_process_rss_kb("Name:\ttest\n"), None);
     }
 }
