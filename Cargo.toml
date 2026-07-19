@@ -1,6 +1,6 @@
 [package]
 name = "amdtop"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 description = "A btop/nvitop-style system monitor for AMD GPUs, CPUs, and XDNA NPUs"
@@ -12,12 +12,8 @@ name = "amdtop"
 path = "src/main.rs"
 
 [dependencies]
-libamdgpu_top = { git = "https://github.com/Umio-Yasuno/amdgpu_top" }
+libamdgpu_top = "0.11.5"
 ratatui = "0.29"
 crossterm = "0.28"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Local-dev override: swap the git dep for a local checkout to poke at the
-# libamdgpu_top public API:
-#   libamdgpu_top = { path = "../reference/amdgpu_top/crates/libamdgpu_top" }

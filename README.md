@@ -3,8 +3,8 @@
 **amdtop is an independent terminal system monitor for AMD systems.** It is
 inspired by the modern TUI visual style of
 [nvitop](https://github.com/XuehaiPan/nvitop) and
-[btop](https://github.com/aristocratos/btop), and leverages
-[`libamdgpu_top`](https://crates.io/crates/libamdgpu_top) for AMD GPU
+[btop](https://github.com/aristocratos/btop), and leverages the published
+[`libamdgpu_top`](https://crates.io/crates/libamdgpu_top) crate for AMD GPU
 telemetry. It monitors CPUs, AMD GPUs (discrete and APUs), and Strix Halo XDNA
 NPUs.
 
@@ -42,9 +42,9 @@ GPU/APU running the `amdgpu` kernel driver.
 cargo install --git https://github.com/lhl/amdtop
 ```
 
-This installs the `amdtop` binary. Its `libamdgpu_top` dependency is compiled
-automatically. The only runtime dependency is `libdrm_amdgpu.so.1`, which is
-present on systems with AMD drivers.
+This installs the `amdtop` binary. The published `libamdgpu_top` crate is
+pulled from crates.io and compiled automatically. The only runtime dependency
+is `libdrm_amdgpu.so.1`, which is present on systems with AMD drivers.
 
 Distro packages for the `libdrm` build headers:
 
