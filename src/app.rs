@@ -58,6 +58,13 @@ pub struct NpuInfo {
 impl App {
     pub fn init() -> Self {
         let mut dps = DevicePath::get_device_path_list();
+        // libamdgpu_top discovers devices through read_dir(), whose order is
+        // unspecified. PCI order is deterministic and matches the physical
+        // ordering used by ROCm's system-management tools.
+        dps.sort_by_key(|device| {
+            let pci = device.pci;
+            (pci.domain, pci.bus, pci.dev, pci.func)
+        });
         for dp in &mut dps {
             dp.fill_amdgpu_device_name();
         }

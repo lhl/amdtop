@@ -129,6 +129,14 @@ need to test that older stack.
 amdtop
 ```
 
+### GPU numbering
+
+amdtop lists all physical GPUs in PCI BDF order and shows each BDF beside its
+index. This normally matches the physical ordering from `rocm-smi` and
+`rocminfo`. `HIP_VISIBLE_DEVICES` and `ROCR_VISIBLE_DEVICES` can hide or remap
+GPU ordinals inside a particular compute process; they do not change amdtop's
+system-wide numbering. Use the displayed PCI BDF as the authoritative mapping.
+
 ### Keybindings
 
 | Key | Action |
@@ -152,6 +160,14 @@ $XDG_CONFIG_HOME/amdtop/state.json
 
 If `XDG_CONFIG_HOME` is unset, it uses `~/.config/amdtop/state.json`. btop theme
 files remain in the standard btop directories listed below.
+
+### GPU power management
+
+amdtop keeps discrete-GPU device handles open while monitoring. This avoids
+stale utilization and sensor readings after a GPU enters a low-power state or
+the system resumes from sleep. To allow runtime D3Hot power management while
+amdtop is running, set `AGT_NO_DROP=0`; doing so may make telemetry unavailable
+until amdtop is restarted.
 
 ### Gauge block styles
 

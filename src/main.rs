@@ -22,6 +22,7 @@ use app::App;
 type Tui = Terminal<CrosstermBackend<io::Stdout>>;
 
 const TICK: Duration = Duration::from_secs(1);
+const BACKEND_NO_DROP_ENV: &str = "AGT_NO_DROP";
 
 struct SampleClock {
     last_sample: Instant,
@@ -52,6 +53,7 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
+    configure_backend();
     let mut app = App::init();
     let mut session = TerminalSession::start()?;
     let run_result = run(session.terminal_mut(), &mut app);
@@ -61,6 +63,19 @@ fn main() -> io::Result<()> {
         Err(error) => Err(error),
         Ok(()) => restore_result,
     }
+}
+
+fn configure_backend() {
+    if should_set_no_drop(std::env::var_os(BACKEND_NO_DROP_ENV).as_deref()) {
+        // SAFETY: This runs on the initial thread before libamdgpu_top creates
+        // its worker threads. No other thread can concurrently access the
+        // process environment at this point.
+        unsafe { std::env::set_var(BACKEND_NO_DROP_ENV, "1") };
+    }
+}
+
+fn should_set_no_drop(current: Option<&std::ffi::OsStr>) -> bool {
+    current.is_none()
 }
 
 fn handle_cli() -> io::Result<bool> {
@@ -187,7 +202,14 @@ fn run(terminal: &mut Tui, app: &mut App) -> io::Result<()> {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use super::{SampleClock, TICK};
+    use super::{SampleClock, TICK, should_set_no_drop};
+
+    #[test]
+    fn backend_keeps_device_handles_unless_the_user_overrides_it() {
+        assert!(should_set_no_drop(None));
+        assert!(!should_set_no_drop(Some("0".as_ref())));
+        assert!(!should_set_no_drop(Some("1".as_ref())));
+    }
 
     #[test]
     fn sample_clock_waits_for_the_tick_interval() {

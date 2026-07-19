@@ -197,22 +197,33 @@ fn gpu_temp_power(a: &libamdgpu_top::app::AppAmdgpuTop) -> (String, String) {
     let s = st.sensors.as_ref();
     let temp = s.and_then(|x| x.junction_temp.as_ref().or(x.edge_temp.as_ref()));
     let temp_s = temp.map_or("  -".into(), |t| format!("{:>3}°C", t.current));
-    let pwr_s = if let Some(s) = s {
-        let pw = s.average_power.as_ref().map(|p| p.value);
-        let cap = s
-            .power_cap
-            .as_ref()
-            .map(|cap| cap.current)
-            .filter(|cap| *cap > 0);
-        match (pw, cap) {
-            (Some(p), Some(c)) => format!("{p}/{c}W"),
-            (Some(p), None) => format!("{p}W"),
-            _ => "  -".into(),
-        }
-    } else {
-        "  -".into()
-    };
+    let pwr_s = s.map_or_else(
+        || "  -".into(),
+        |sensors| {
+            power_text(
+                sensors.average_power.as_ref().map(|power| power.value),
+                sensors
+                    .power_cap
+                    .as_ref()
+                    .and_then(|cap| effective_power_cap(cap.current, cap.default)),
+            )
+        },
+    );
     (temp_s, pwr_s)
+}
+
+fn effective_power_cap(current_watts: u32, default_watts: u32) -> Option<u32> {
+    [current_watts, default_watts]
+        .into_iter()
+        .find(|watts| *watts > 0)
+}
+
+fn power_text(average_watts: Option<u32>, cap_watts: Option<u32>) -> String {
+    match (average_watts, cap_watts) {
+        (Some(average), Some(cap)) => format!("{average}/{cap}W"),
+        (Some(average), None) => format!("{average}W"),
+        _ => "  -".into(),
+    }
 }
 
 fn gpu_clocks_fan(a: &libamdgpu_top::app::AppAmdgpuTop) -> (String, String, String) {
@@ -261,12 +272,21 @@ fn short_name(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{fmt_bytes, short_name};
+    use super::{effective_power_cap, fmt_bytes, power_text, short_name};
 
     #[test]
     fn byte_formatting_uses_binary_units() {
         assert_eq!(fmt_bytes(512 << 20), "512M");
         assert_eq!(fmt_bytes(3 << 30), "3.0G");
+    }
+
+    #[test]
+    fn zero_power_caps_fall_back_to_the_default_limit() {
+        assert_eq!(effective_power_cap(0, 303), Some(303));
+        assert_eq!(effective_power_cap(280, 303), Some(280));
+        assert_eq!(effective_power_cap(0, 0), None);
+        assert_eq!(power_text(Some(9), Some(303)), "9/303W");
+        assert_eq!(power_text(None, Some(303)), "  -");
     }
 
     #[test]

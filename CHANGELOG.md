@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-07-19
+
+### Changed
+
+- Sort physical GPUs by PCI BDF so amdtop numbering is deterministic and
+  agrees with `rocm-smi`/`rocminfo` physical ordering.
+- Document the distinction between system-wide GPU indices and
+  `HIP_VISIBLE_DEVICES`/`ROCR_VISIBLE_DEVICES` process-local mappings.
+- Pin `libamdgpu_top` to the reviewed 0.11.5 release so backend behavior cannot
+  change without an amdtop update.
+
+### Fixed
+
+- Keep discrete-GPU device handles open by default to prevent utilization,
+  clocks, and sensors from becoming stuck at idle after low-power transitions
+  or system sleep. Set `AGT_NO_DROP=0` to restore runtime D3Hot behavior.
+- Fall back to the driver's default power limit when it reports a zero current
+  cap, rather than displaying `0W`.
+- Refresh the screenshot with corrected GPU ordering and live sensors for both
+  test GPUs.
+
 ## [0.2.1] - 2026-07-19
 
 ### Added
@@ -64,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Collapsible sections, persistent UI state, btop theme support, and selectable
   gauge styles.
 
-[Unreleased]: https://github.com/lhl/amdtop/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/lhl/amdtop/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/lhl/amdtop/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/lhl/amdtop/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/lhl/amdtop/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lhl/amdtop/releases/tag/v0.1.0
