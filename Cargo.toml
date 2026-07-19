@@ -1,10 +1,16 @@
 [package]
 name = "amdtop"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
+rust-version = "1.88"
 license = "MIT"
 description = "A btop/nvitop-style system monitor for AMD GPUs, CPUs, and XDNA NPUs"
+homepage = "https://github.com/lhl/amdtop"
 repository = "https://github.com/lhl/amdtop"
+readme = "README.md"
+keywords = ["amd", "gpu", "monitoring", "tui", "linux"]
+categories = ["command-line-utilities", "hardware-support"]
+autobins = false
 authors = ["LHL"]
 
 [[bin]]

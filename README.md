@@ -35,8 +35,16 @@ layout.
 
 ## Install
 
-Requires a **Rust toolchain** and **`libdrm` development headers**, plus an AMD
-GPU/APU running the `amdgpu` kernel driver.
+Requires **Rust 1.88 or newer** and **`libdrm` development headers**, plus an
+AMD GPU/APU running the `amdgpu` kernel driver.
+
+Install from crates.io:
+
+```sh
+cargo install amdtop
+```
+
+Or install the latest development version from Git:
 
 ```sh
 cargo install --git https://github.com/lhl/amdtop
@@ -133,6 +141,17 @@ amdtop
 
 Section collapse state, the selected theme, and the gauge block style all
 persist across runs.
+
+## Configuration
+
+amdtop stores its UI state in:
+
+```text
+$XDG_CONFIG_HOME/amdtop/state.json
+```
+
+If `XDG_CONFIG_HOME` is unset, it uses `~/.config/amdtop/state.json`. btop theme
+files remain in the standard btop directories listed below.
 
 ### Gauge block styles
 
