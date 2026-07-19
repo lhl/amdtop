@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-19
+
 ### Added
 
 - Add a maintainer publishing checklist and a GitHub Actions OIDC workflow for
   tokenless crates.io releases.
+
+### Changed
+
+- Refresh the README screenshot with representative variable CPU and dual-GPU
+  load, including live GPU process telemetry.
 
 ### Fixed
 
@@ -95,7 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Collapsible sections, persistent UI state, btop theme support, and selectable
   gauge styles.
 
-[Unreleased]: https://github.com/lhl/amdtop/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/lhl/amdtop/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/lhl/amdtop/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/lhl/amdtop/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/lhl/amdtop/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/lhl/amdtop/compare/v0.1.0...v0.2.0
