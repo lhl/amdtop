@@ -1,4 +1,4 @@
-//! Application state: libamdgpu_top apps, samplers, history, UI section state.
+//! Application state: `libamdgpu_top` apps, samplers, history, and UI state.
 
 use std::fs;
 use std::os::fd::AsRawFd;
@@ -13,6 +13,8 @@ use crate::cpu::{CpuSampler, SystemMem, cpu_model};
 use crate::history::History;
 use crate::theme::{DEFAULT_THEME, Theme};
 
+const HISTORY_CAPACITY: usize = 80;
+
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum Section {
     Cpu,
@@ -23,19 +25,10 @@ pub enum Section {
 
 impl Section {
     pub const ALL: [Section; 4] = [Section::Cpu, Section::Gpu, Section::Npu, Section::Processes];
-    pub fn label(self) -> &'static str {
-        match self {
-            Section::Cpu => "CPU",
-            Section::Gpu => "GPU",
-            Section::Npu => "NPU",
-            Section::Processes => "PROCESSES",
-        }
-    }
 }
 
 pub struct App {
     pub apps: Vec<AppAmdgpuTop>,
-    pub suspended: Vec<DevicePath>,
     pub cpu: CpuSampler,
     pub mem: SystemMem,
     pub collapse: CollapseState,
@@ -63,12 +56,12 @@ pub struct NpuInfo {
 }
 
 impl App {
-    pub fn init() -> std::io::Result<Self> {
+    pub fn init() -> Self {
         let mut dps = DevicePath::get_device_path_list();
-        for dp in dps.iter_mut() {
+        for dp in &mut dps {
             dp.fill_amdgpu_device_name();
         }
-        let (apps, suspended) =
+        let (apps, _suspended) =
             AppAmdgpuTop::create_app_and_suspended_list(&dps, &AppOption::default());
         let n = apps.len();
         let npu_info = detect_npu(&apps);
@@ -81,19 +74,18 @@ impl App {
             collapse.theme.clone()
         };
         let theme = Theme::load(&theme_name);
-        let block_style = collapse.block_style as usize % crate::gauge::BLOCK_STYLES.len();
+        let block_style = collapse.block_style % crate::gauge::BLOCK_STYLES.len();
 
-        Ok(Self {
+        Self {
             apps,
-            suspended,
             cpu: CpuSampler::default(),
             mem: SystemMem::default(),
             collapse,
             section: Section::Gpu,
-            hist_cpu: History::new(80),
-            hist_gpu: (0..n).map(|_| History::new(80)).collect(),
-            hist_mem: (0..n).map(|_| History::new(80)).collect(),
-            hist_npu: History::new(80),
+            hist_cpu: History::new(HISTORY_CAPACITY),
+            hist_gpu: (0..n).map(|_| History::new(HISTORY_CAPACITY)).collect(),
+            hist_mem: (0..n).map(|_| History::new(HISTORY_CAPACITY)).collect(),
+            hist_npu: History::new(HISTORY_CAPACITY),
             hist_cores: Vec::new(),
             npu_info,
             has_npu,
@@ -102,12 +94,12 @@ impl App {
             themes: Theme::list_available(),
             block_style,
             cpu_model: cpu_model(),
-        })
+        }
     }
 
-    pub fn cycle_theme(&mut self, forward: bool) {
+    pub fn cycle_theme(&mut self, forward: bool) -> std::io::Result<()> {
         if self.themes.is_empty() {
-            return;
+            return Ok(());
         }
         let idx = self
             .themes
@@ -123,27 +115,27 @@ impl App {
         self.theme_name = self.themes[next].clone();
         self.theme = Theme::load(&self.theme_name);
         self.collapse.theme = self.theme_name.clone();
-        self.save_state();
+        self.save_state()
     }
 
-    pub fn cycle_block(&mut self, forward: bool) {
+    pub fn cycle_block(&mut self, forward: bool) -> std::io::Result<()> {
         let len = crate::gauge::BLOCK_STYLES.len();
         self.block_style = if forward {
             (self.block_style + 1) % len
         } else {
             (self.block_style + len - 1) % len
         };
-        self.collapse.block_style = self.block_style as u8;
-        self.save_state();
+        self.collapse.block_style = self.block_style;
+        self.save_state()
     }
 
     pub fn block_style_name(&self) -> &'static str {
         crate::gauge::block_style(self.block_style).name
     }
 
-    pub fn sample(&mut self) {
-        for app in self.apps.iter_mut() {
-            app.update(Duration::from_millis(1000));
+    pub fn sample(&mut self, interval: Duration) {
+        for app in &mut self.apps {
+            app.update(interval);
         }
         self.cpu.tick();
         self.mem.tick();
@@ -154,7 +146,7 @@ impl App {
         // per-core history
         if self.hist_cores.len() != self.cpu.per_core_percent.len() {
             self.hist_cores = (0..self.cpu.per_core_percent.len())
-                .map(|_| History::new(80))
+                .map(|_| History::new(HISTORY_CAPACITY))
                 .collect();
         }
         for (i, p) in self.cpu.per_core_percent.iter().enumerate() {
@@ -165,22 +157,22 @@ impl App {
         for (i, app) in self.apps.iter().enumerate() {
             let gfx = app.stat.activity.gfx.unwrap_or(0) as u64;
             self.hist_gpu[i].push(gfx);
-            let (_, mem_pct, _) = gpu_mem_info(app);
-            self.hist_mem[i].push(mem_pct.round() as u64);
+            let memory = gpu_mem_info(app);
+            self.hist_mem[i].push(memory.percent.round() as u64);
         }
 
         // NPU aggregate (sum of per-context npu%, clamped)
-        let mut npu_sum: i64 = 0;
-        for app in &self.apps {
-            for pu in &app.stat.xdna_fdinfo.proc_usage {
-                npu_sum += pu.usage.npu.max(0);
-            }
-        }
+        let npu_sum = self
+            .apps
+            .iter()
+            .flat_map(|app| &app.stat.xdna_fdinfo.proc_usage)
+            .map(|process| process.usage.npu.max(0))
+            .sum::<i64>();
         self.hist_npu.push(npu_sum.clamp(0, 100) as u64);
     }
 
-    pub fn save_state(&self) {
-        self.collapse.save();
+    pub fn save_state(&self) -> std::io::Result<()> {
+        self.collapse.save()
     }
 
     pub fn next_section(&mut self) {
@@ -203,14 +195,14 @@ impl App {
         self.section = order[(idx + order.len() - 1) % order.len()];
     }
 
-    pub fn toggle_collapse(&mut self) {
+    pub fn toggle_collapse(&mut self) -> std::io::Result<()> {
         match self.section {
             Section::Cpu => self.collapse.cpu = !self.collapse.cpu,
             Section::Gpu => self.collapse.gpu = !self.collapse.gpu,
             Section::Npu => self.collapse.npu = !self.collapse.npu,
             Section::Processes => self.collapse.processes = !self.collapse.processes,
         }
-        self.save_state();
+        self.save_state()
     }
 
     pub fn is_collapsed(&self, s: Section) -> bool {
@@ -315,45 +307,60 @@ fn fdinfo_has_drm_driver(accel_path: &Path) -> bool {
         .is_ok_and(|s| s.lines().any(|line| line.starts_with("drm-driver")))
 }
 
-/// APU-aware memory info: on APUs the real allocatable pool is GTT (system RAM
-/// via GART), not the small VRAM carveout. Returns (label, pct, used_bytes,
-/// total_bytes, pool_kind).
+/// APU-aware memory usage. APUs use the GTT (system RAM) pool; discrete GPUs
+/// use VRAM.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MemInfo {
-    pub label: &'static str,
-    pub pct: f64,
+    pub percent: f64,
     pub used_bytes: u64,
     pub total_bytes: u64,
-    pub is_apu: bool,
 }
 
-pub fn gpu_mem_info(app: &AppAmdgpuTop) -> (String, f64, MemInfo) {
-    let is_apu = app.device_info.is_apu;
-    let v = &app.stat.vram_usage.0;
-    let vram_used = v.vram.heap_usage;
-    let vram_total = v.vram.usable_heap_size.max(1);
-    let gtt_used = v.gtt.heap_usage;
-    let gtt_total = v.gtt.usable_heap_size.max(1);
-
-    // Always label "MEM" for clarity. On APUs the real pool is GTT (unified
-    // system RAM); on dGPUs it's VRAM. The pool selection differs; the label
-    // does not.
-    let (used, total) = if is_apu {
-        (gtt_used, gtt_total)
-    } else {
-        (vram_used, vram_total)
-    };
-    let label = "MEM";
-    let pct = (used as f64 / total as f64) * 100.0;
-    let display_label = "MEM".to_string();
-    (
-        display_label,
-        pct,
-        MemInfo {
-            label,
-            pct,
-            used_bytes: used,
-            total_bytes: total,
-            is_apu,
-        },
+pub fn gpu_mem_info(app: &AppAmdgpuTop) -> MemInfo {
+    let usage = &app.stat.vram_usage.0;
+    memory_info(
+        app.device_info.is_apu,
+        (usage.vram.heap_usage, usage.vram.usable_heap_size),
+        (usage.gtt.heap_usage, usage.gtt.usable_heap_size),
     )
+}
+
+fn memory_info(is_apu: bool, vram: (u64, u64), gtt: (u64, u64)) -> MemInfo {
+    let (used_bytes, total_bytes) = if is_apu { gtt } else { vram };
+    let percent = if total_bytes == 0 {
+        0.0
+    } else {
+        (used_bytes as f64 / total_bytes as f64 * 100.0).clamp(0.0, 100.0)
+    };
+    MemInfo {
+        percent,
+        used_bytes,
+        total_bytes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::memory_info;
+
+    #[test]
+    fn memory_info_selects_gtt_for_apus_and_vram_for_discrete_gpus() {
+        let apu = memory_info(true, (10, 100), (20, 200));
+        let discrete = memory_info(false, (10, 100), (20, 200));
+
+        assert_eq!(
+            (apu.used_bytes, apu.total_bytes, apu.percent),
+            (20, 200, 10.0)
+        );
+        assert_eq!(
+            (discrete.used_bytes, discrete.total_bytes, discrete.percent),
+            (10, 100, 10.0)
+        );
+    }
+
+    #[test]
+    fn memory_info_handles_zero_and_overcommitted_pools() {
+        assert_eq!(memory_info(false, (10, 0), (0, 0)).percent, 0.0);
+        assert_eq!(memory_info(false, (200, 100), (0, 0)).percent, 100.0);
+    }
 }

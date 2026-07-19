@@ -3,7 +3,7 @@
 //! + gradient samplers. Defaults to `everforest-dark-hard`.
 //!
 //! Search paths (first hit wins):
-//!   $XDG_CONFIG_HOME/btop/themes/  (~/.config/btop/themes)
+//!   `$XDG_CONFIG_HOME/btop/themes/` (`~/.config/btop/themes`)
 //!   /usr/local/share/btop/themes/
 //!   /usr/share/btop/themes/
 
@@ -30,7 +30,7 @@ impl Gradient {
     pub fn sample(self, t: f64) -> Color {
         let t = t.clamp(0.0, 1.0);
         match (self.mid, self.end) {
-            (None, None) => self.start,
+            (None, None) | (Some(_), None) => self.start,
             (None, Some(e)) => lerp(self.start, e, t),
             (Some(m), Some(e)) => {
                 if t < 0.5 {
@@ -39,7 +39,6 @@ impl Gradient {
                     lerp(m, e, (t - 0.5) * 2.0)
                 }
             }
-            (Some(_), None) => self.start,
         }
     }
 }
@@ -54,24 +53,60 @@ fn lerp(a: Color, b: Color, t: f64) -> Color {
     )
 }
 
-fn to_rgb(c: Color) -> (u8, u8, u8) {
-    match c {
-        Color::Rgb(r, g, b) => (r, g, b),
-        Color::Indexed(i) => {
-            // 6x6x6 cube
-            if (216..=231).contains(&i) {
-                let i = i - 216;
-                (36 + (i / 36) * 51, 36 + ((i / 6) % 6) * 51, 36 + (i % 6) * 51)
-            } else if (232..=255).contains(&i) {
-                let v = 8 + (i - 232) * 10;
-                (v, v, v)
-            } else {
-                (200, 200, 200)
-            }
+fn to_rgb(color: Color) -> (u8, u8, u8) {
+    match color {
+        Color::Reset | Color::Black => (0, 0, 0),
+        Color::Red => (128, 0, 0),
+        Color::Green => (0, 128, 0),
+        Color::Yellow => (128, 128, 0),
+        Color::Blue => (0, 0, 128),
+        Color::Magenta => (128, 0, 128),
+        Color::Cyan => (0, 128, 128),
+        Color::Gray => (192, 192, 192),
+        Color::DarkGray => (128, 128, 128),
+        Color::LightRed => (255, 0, 0),
+        Color::LightGreen => (0, 255, 0),
+        Color::LightYellow => (255, 255, 0),
+        Color::LightBlue => (0, 0, 255),
+        Color::LightMagenta => (255, 0, 255),
+        Color::LightCyan => (0, 255, 255),
+        Color::White => (255, 255, 255),
+        Color::Rgb(red, green, blue) => (red, green, blue),
+        Color::Indexed(index @ 0..=15) => ANSI_COLORS[index as usize],
+        Color::Indexed(index @ 16..=231) => {
+            let index = index - 16;
+            let component = |value| if value == 0 { 0 } else { 55 + value * 40 };
+            (
+                component(index / 36),
+                component((index / 6) % 6),
+                component(index % 6),
+            )
         }
-        _ => (200, 200, 200),
+        Color::Indexed(index) => {
+            let value = 8 + (index - 232) * 10;
+            (value, value, value)
+        }
     }
 }
+
+const ANSI_COLORS: [(u8, u8, u8); 16] = [
+    (0, 0, 0),
+    (128, 0, 0),
+    (0, 128, 0),
+    (128, 128, 0),
+    (0, 0, 128),
+    (128, 0, 128),
+    (0, 128, 128),
+    (192, 192, 192),
+    (128, 128, 128),
+    (255, 0, 0),
+    (0, 255, 0),
+    (255, 255, 0),
+    (0, 0, 255),
+    (255, 0, 255),
+    (0, 255, 255),
+    (255, 255, 255),
+];
 
 /// Parse a btop color value. Formats: `#RRGGBB`, `#BW` (2-hex grayscale),
 /// `R G B` (decimal). Empty string -> None (terminal default / transparent).
@@ -95,35 +130,63 @@ fn parse_color(s: &str) -> Option<Color> {
         return None;
     }
     // decimal "R G B"
-    let nums: Vec<u8> = s.split_whitespace().filter_map(|p| p.parse().ok()).collect();
-    if nums.len() == 3 {
-        return Some(Color::Rgb(nums[0], nums[1], nums[2]));
+    let mut fields = s.split_whitespace();
+    let red = fields.next()?.parse().ok()?;
+    let green = fields.next()?.parse().ok()?;
+    let blue = fields.next()?.parse().ok()?;
+    fields
+        .next()
+        .is_none()
+        .then_some(Color::Rgb(red, green, blue))
+}
+
+fn color(values: &HashMap<String, String>, key: &str) -> Option<Color> {
+    values.get(key).and_then(|value| parse_color(value))
+}
+
+fn color_or(values: &HashMap<String, String>, key: &str, default: Color) -> Color {
+    color(values, key).unwrap_or(default)
+}
+
+fn gradient(values: &HashMap<String, String>, name: &str) -> Gradient {
+    Gradient {
+        start: color(values, &format!("{name}_start")).unwrap_or(Color::Rgb(0xa7, 0xc0, 0x80)),
+        mid: color(values, &format!("{name}_mid")),
+        end: color(values, &format!("{name}_end")),
     }
-    None
 }
 
 pub struct Theme {
-    raw: HashMap<String, String>,
+    main_bg: Option<Color>,
+    main_fg: Color,
+    title: Color,
+    hi_fg: Color,
+    selected_bg: Color,
+    selected_fg: Color,
+    inactive_fg: Color,
+    graph_text: Color,
+    proc_misc: Color,
+    cpu_box: Color,
+    mem_box: Color,
+    npu_box: Color,
+    proc_box: Color,
+    temp: Gradient,
+    cpu: Gradient,
+    used: Gradient,
+    process: Gradient,
 }
 
 impl Theme {
     /// Load a named btop theme from the standard search paths.
     /// Falls back to the built-in everforest-dark-hard palette if not found.
     pub fn load(name: &str) -> Self {
-        for dir in search_dirs() {
-            let p = dir.join(format!("{name}.theme"));
-            if p.exists() {
-                if let Ok(text) = fs::read_to_string(&p) {
-                    return Self::parse(&text);
-                }
+        for directory in search_dirs() {
+            let path = directory.join(format!("{name}.theme"));
+            if let Ok(text) = fs::read_to_string(path) {
+                return Self::parse(&text);
             }
         }
         Self::parse(EVERFOREST_FALLBACK)
-    }
-
-    /// Load the default theme (everforest-dark-hard).
-    pub fn default_theme() -> Self {
-        Self::load(DEFAULT_THEME)
     }
 
     /// List all available theme names found in the search paths (sorted, unique).
@@ -133,10 +196,10 @@ impl Theme {
             if let Ok(rd) = fs::read_dir(&dir) {
                 for e in rd.flatten() {
                     let p = e.path();
-                    if p.extension().and_then(|x| x.to_str()) == Some("theme") {
-                        if let Some(stem) = p.file_stem().and_then(|x| x.to_str()) {
-                            set.insert(stem.to_string());
-                        }
+                    if p.extension().and_then(|x| x.to_str()) == Some("theme")
+                        && let Some(stem) = p.file_stem().and_then(|x| x.to_str())
+                    {
+                        set.insert(stem.to_string());
                     }
                 }
             }
@@ -153,94 +216,91 @@ impl Theme {
                 continue;
             }
             // theme[key]="value"
-            if let Some(rest) = line.strip_prefix("theme[") {
-                if let Some(close) = rest.find(']') {
-                    let key = rest[..close].to_string();
-                    let val_part = rest[close + 1..].trim_start();
-                    let val = val_part.strip_prefix('=').unwrap_or(val_part).trim();
-                    // strip quotes
-                    let val = val.trim_matches('"');
-                    raw.insert(key, val.to_string());
-                }
+            if let Some(rest) = line.strip_prefix("theme[")
+                && let Some(close) = rest.find(']')
+            {
+                let key = rest[..close].to_string();
+                let val_part = rest[close + 1..].trim_start();
+                let val = val_part.strip_prefix('=').unwrap_or(val_part).trim();
+                // strip quotes
+                let val = val.trim_matches('"');
+                raw.insert(key, val.to_string());
             }
         }
-        Self { raw }
+        let main_fg = color_or(&raw, "main_fg", Color::Rgb(0xd3, 0xc6, 0xaa));
+        let div_line = color_or(&raw, "div_line", Color::Rgb(0x37, 0x41, 0x45));
+        Self {
+            main_bg: color(&raw, "main_bg"),
+            main_fg,
+            title: color_or(&raw, "title", main_fg),
+            hi_fg: color_or(&raw, "hi_fg", Color::Rgb(0xe6, 0x7e, 0x80)),
+            selected_bg: color_or(&raw, "selected_bg", Color::Rgb(0x37, 0x41, 0x45)),
+            selected_fg: color_or(&raw, "selected_fg", Color::Rgb(0xdb, 0xbc, 0x7f)),
+            inactive_fg: color_or(&raw, "inactive_fg", Color::Rgb(0x50, 0x49, 0x45)),
+            graph_text: color_or(&raw, "graph_text", main_fg),
+            proc_misc: color_or(&raw, "proc_misc", Color::Rgb(0xa7, 0xc0, 0x80)),
+            cpu_box: color_or(&raw, "cpu_box", div_line),
+            mem_box: color_or(&raw, "mem_box", div_line),
+            npu_box: color_or(&raw, "net_box", div_line),
+            proc_box: color_or(&raw, "proc_box", div_line),
+            temp: gradient(&raw, "temp"),
+            cpu: gradient(&raw, "cpu"),
+            used: gradient(&raw, "used"),
+            process: gradient(&raw, "process"),
+        }
     }
 
-    fn color(&self, key: &str) -> Option<Color> {
-        self.raw.get(key).and_then(|s| parse_color(s))
-    }
-
-    fn color_or(&self, key: &str, default: Color) -> Color {
-        self.color(key).unwrap_or(default)
-    }
-
-    fn gradient(&self, name: &str) -> Gradient {
-        // name like "cpu" -> cpu_start / cpu_mid / cpu_end
-        let start = self
-            .color(&format!("{name}_start"))
-            .unwrap_or(Color::Rgb(0xa7, 0xc0, 0x80));
-        let mid = self.color(&format!("{name}_mid"));
-        let end = self.color(&format!("{name}_end"));
-        Gradient { start, mid, end }
-    }
-
-    // --- resolved accessors ---
-
-    /// Main background. None => transparent (use terminal default).
+    /// Main background. None means to use the terminal default.
     pub fn main_bg(&self) -> Option<Color> {
-        self.color("main_bg")
+        self.main_bg
     }
     pub fn main_fg(&self) -> Color {
-        self.color_or("main_fg", Color::Rgb(0xd3, 0xc6, 0xaa))
+        self.main_fg
     }
     pub fn title(&self) -> Color {
-        self.color_or("title", self.main_fg())
+        self.title
     }
     pub fn hi_fg(&self) -> Color {
-        self.color_or("hi_fg", Color::Rgb(0xe6, 0x7e, 0x80))
+        self.hi_fg
     }
     pub fn selected_bg(&self) -> Color {
-        self.color_or("selected_bg", Color::Rgb(0x37, 0x41, 0x45))
+        self.selected_bg
     }
     pub fn selected_fg(&self) -> Color {
-        self.color_or("selected_fg", Color::Rgb(0xdb, 0xbc, 0x7f))
+        self.selected_fg
     }
     pub fn inactive_fg(&self) -> Color {
-        self.color_or("inactive_fg", Color::Rgb(0x50, 0x49, 0x45))
+        self.inactive_fg
     }
     pub fn graph_text(&self) -> Color {
-        self.color_or("graph_text", self.main_fg())
+        self.graph_text
     }
     pub fn proc_misc(&self) -> Color {
-        self.color_or("proc_misc", Color::Rgb(0xa7, 0xc0, 0x80))
+        self.proc_misc
     }
-    pub fn div_line(&self) -> Color {
-        self.color_or("div_line", Color::Rgb(0x37, 0x41, 0x45))
-    }
-
-    /// Box outline color for a given section kind.
     pub fn box_color(&self, kind: SectionBox) -> Color {
-        let key = match kind {
-            SectionBox::Cpu => "cpu_box",
-            SectionBox::Mem => "mem_box",
-            SectionBox::Net => "net_box",
-            SectionBox::Proc => "proc_box",
-        };
-        self.color_or(key, self.div_line())
+        match kind {
+            SectionBox::Cpu => self.cpu_box,
+            SectionBox::Mem => self.mem_box,
+            SectionBox::Npu => self.npu_box,
+            SectionBox::Proc => self.proc_box,
+        }
     }
 
-    // gradients
-    pub fn temp(&self) -> Gradient { self.gradient("temp") }
-    pub fn cpu(&self) -> Gradient { self.gradient("cpu") }
-    pub fn used(&self) -> Gradient { self.gradient("used") }
-    pub fn free(&self) -> Gradient { self.gradient("free") }
-    pub fn cached(&self) -> Gradient { self.gradient("cached") }
-    pub fn available(&self) -> Gradient { self.gradient("available") }
-    pub fn process(&self) -> Gradient { self.gradient("process") }
+    pub fn temp(&self) -> Gradient {
+        self.temp
+    }
+    pub fn cpu(&self) -> Gradient {
+        self.cpu
+    }
+    pub fn used(&self) -> Gradient {
+        self.used
+    }
+    pub fn process(&self) -> Gradient {
+        self.process
+    }
 
-    /// nvitop-style discrete threshold color for a percentage, but sourced
-    /// from the theme's `used`/`temp` gradients so it matches the palette.
+    /// Sample the appropriate theme gradient for a utilization percentage.
     pub fn util_color(&self, pct: f64, kind: UtilKind) -> Color {
         // map nvitop thresholds onto gradient positions:
         // light (<10%) -> start, moderate (10-75/80%) -> mid-ish, heavy -> end
@@ -255,22 +315,40 @@ impl Theme {
 }
 
 #[derive(Clone, Copy)]
-pub enum SectionBox { Cpu, Mem, Net, Proc }
+pub enum SectionBox {
+    Cpu,
+    Mem,
+    Npu,
+    Proc,
+}
 
 #[derive(Clone, Copy)]
-pub enum UtilKind { Gpu, Mem, Npu }
+pub enum UtilKind {
+    Gpu,
+    Mem,
+    Npu,
+}
 
 fn search_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        dirs.push(PathBuf::from(xdg).join("btop/themes"));
+    let xdg_config = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from);
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    search_dirs_from(xdg_config.as_deref(), home.as_deref())
+}
+
+fn search_dirs_from(
+    xdg_config: Option<&std::path::Path>,
+    home: Option<&std::path::Path>,
+) -> Vec<PathBuf> {
+    let mut directories = Vec::with_capacity(4);
+    if let Some(xdg_config) = xdg_config.filter(|path| path.is_absolute()) {
+        directories.push(xdg_config.join("btop/themes"));
     }
-    if let Ok(home) = std::env::var("HOME") {
-        dirs.push(PathBuf::from(home).join(".config/btop/themes"));
+    if let Some(home) = home {
+        directories.push(home.join(".config/btop/themes"));
     }
-    dirs.push(PathBuf::from("/usr/local/share/btop/themes"));
-    dirs.push(PathBuf::from("/usr/share/btop/themes"));
-    dirs
+    directories.push(PathBuf::from("/usr/local/share/btop/themes"));
+    directories.push(PathBuf::from("/usr/share/btop/themes"));
+    directories
 }
 
 /// Bundled fallback in case no theme files are installed on the system.
@@ -306,3 +384,58 @@ theme[process_start]="#a7c080"
 theme[process_mid]="#f85552"
 theme[process_end]="#CC241D"
 "##;
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use ratatui::style::Color;
+
+    use super::{Gradient, Theme, parse_color, search_dirs_from, to_rgb};
+
+    #[test]
+    fn parse_color_supports_btop_formats() {
+        assert_eq!(parse_color("#12aBcF"), Some(Color::Rgb(0x12, 0xab, 0xcf)));
+        assert_eq!(parse_color("#80"), Some(Color::Rgb(0x80, 0x80, 0x80)));
+        assert_eq!(parse_color("1 2 3"), Some(Color::Rgb(1, 2, 3)));
+        assert_eq!(parse_color("1 nope 2 3"), None);
+        assert_eq!(parse_color("1 2 3 4"), None);
+        assert_eq!(parse_color("not-a-color"), None);
+    }
+
+    #[test]
+    fn theme_parser_resolves_named_colors() {
+        let theme = Theme::parse("theme[main_fg]=\"#010203\"");
+        assert_eq!(theme.main_fg(), Color::Rgb(1, 2, 3));
+    }
+
+    #[test]
+    fn gradient_interpolates_through_midpoint() {
+        let gradient = Gradient {
+            start: Color::Rgb(0, 0, 0),
+            mid: Some(Color::Rgb(100, 100, 100)),
+            end: Some(Color::Rgb(200, 200, 200)),
+        };
+
+        assert_eq!(gradient.sample(0.5), Color::Rgb(100, 100, 100));
+        assert_eq!(gradient.sample(1.0), Color::Rgb(200, 200, 200));
+    }
+
+    #[test]
+    fn indexed_colors_follow_the_xterm_palette() {
+        assert_eq!(to_rgb(Color::Indexed(16)), (0, 0, 0));
+        assert_eq!(to_rgb(Color::Indexed(21)), (0, 0, 255));
+        assert_eq!(to_rgb(Color::Indexed(231)), (255, 255, 255));
+        assert_eq!(to_rgb(Color::Indexed(232)), (8, 8, 8));
+    }
+
+    #[test]
+    fn theme_search_paths_follow_xdg_conventions() {
+        let paths = search_dirs_from(Some(Path::new("/tmp/xdg")), Some(Path::new("/home/test")));
+        assert_eq!(paths[0], Path::new("/tmp/xdg/btop/themes"));
+        assert_eq!(paths[1], Path::new("/home/test/.config/btop/themes"));
+
+        let relative = search_dirs_from(Some(Path::new("relative")), Some(Path::new("/home/test")));
+        assert_eq!(relative[0], Path::new("/home/test/.config/btop/themes"));
+    }
+}

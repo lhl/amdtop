@@ -14,21 +14,29 @@ pub struct CpuSampler {
 }
 
 fn parse_cpu_line(line: &str) -> Option<(u64, u64)> {
-    let nums: Vec<u64> = line
-        .split_whitespace()
-        .skip(1)
-        .filter_map(|s| s.parse().ok())
-        .collect();
-    if nums.len() < 4 {
+    let mut count = 0;
+    let mut total = 0_u64;
+    let mut idle = 0_u64;
+    let mut guest = 0_u64;
+    let mut guest_nice = 0_u64;
+
+    for (index, field) in line.split_whitespace().skip(1).enumerate() {
+        let value = field.parse::<u64>().ok()?;
+        count += 1;
+        total = total.saturating_add(value);
+        match index {
+            3 | 4 => idle = idle.saturating_add(value),
+            8 => guest = value,
+            9 => guest_nice = value,
+            _ => {}
+        }
+    }
+    if count < 4 {
         return None;
     }
-    let idle = nums[3] + nums.get(4).unwrap_or(&0);
-    let mut total: u64 = nums.iter().sum();
+
     // guest/guest_nice are already counted in user/nice; avoid double count.
-    if nums.len() > 8 {
-        total -= nums[8];
-    }
-    Some((total, idle))
+    Some((total.saturating_sub(guest).saturating_sub(guest_nice), idle))
 }
 
 impl CpuSampler {
@@ -39,10 +47,10 @@ impl CpuSampler {
             self.last = Some(now);
             return;
         }
-        if let Some(prev) = self.last {
-            if now.duration_since(prev).as_millis() < 200 {
-                return;
-            }
+        if let Some(prev) = self.last
+            && now.duration_since(prev).as_millis() < 200
+        {
+            return;
         }
         self.prime();
         self.last = Some(now);
@@ -53,38 +61,41 @@ impl CpuSampler {
             return;
         };
         let mut lines = content.lines();
-        if let Some(first) = lines.next() {
-            if let Some((total, idle)) = parse_cpu_line(first) {
-                let dt = total.saturating_sub(self.prev_total);
-                let di = idle.saturating_sub(self.prev_idle);
-                if dt > 0 {
-                    self.cpu_percent = (1.0 - di as f64 / dt as f64) * 100.0;
-                }
-                self.prev_total = total;
-                self.prev_idle = idle;
+        if let Some(first) = lines.next()
+            && let Some((total, idle)) = parse_cpu_line(first)
+        {
+            let dt = total.saturating_sub(self.prev_total);
+            let di = idle.saturating_sub(self.prev_idle);
+            if dt > 0 {
+                self.cpu_percent = ((1.0 - di as f64 / dt as f64) * 100.0).clamp(0.0, 100.0);
             }
+            self.prev_total = total;
+            self.prev_idle = idle;
         }
-        let mut per: Vec<(f64, (u64, u64))> = Vec::new();
-        for line in lines {
-            if !line.starts_with("cpu") || line.starts_with("cpu ") {
-                continue;
-            }
+        self.per_core_percent.clear();
+        let mut index = 0;
+        for line in lines.filter(|line| line.starts_with("cpu") && !line.starts_with("cpu ")) {
             let Some((total, idle)) = parse_cpu_line(line) else {
                 continue;
             };
-            let idx = per.len();
-            let prev = self.prev_per.get(idx).copied().unwrap_or((total, idle));
-            let dt = total.saturating_sub(prev.0);
-            let di = idle.saturating_sub(prev.1);
-            let pct = if dt > 0 {
-                (1.0 - di as f64 / dt as f64) * 100.0
+            let previous = self.prev_per.get(index).copied().unwrap_or((total, idle));
+            let delta_total = total.saturating_sub(previous.0);
+            let delta_idle = idle.saturating_sub(previous.1);
+            let percent = if delta_total > 0 {
+                ((1.0 - delta_idle as f64 / delta_total as f64) * 100.0).clamp(0.0, 100.0)
             } else {
                 0.0
             };
-            per.push((pct, (total, idle)));
+
+            self.per_core_percent.push(percent);
+            if let Some(previous) = self.prev_per.get_mut(index) {
+                *previous = (total, idle);
+            } else {
+                self.prev_per.push((total, idle));
+            }
+            index += 1;
         }
-        self.per_core_percent = per.iter().map(|(p, _)| *p).collect();
-        self.prev_per = per.iter().map(|(_, t)| *t).collect();
+        self.prev_per.truncate(index);
     }
 }
 
@@ -92,10 +103,10 @@ impl CpuSampler {
 pub fn cpu_model() -> String {
     if let Ok(s) = fs::read_to_string("/proc/cpuinfo") {
         for line in s.lines() {
-            if let Some(rest) = line.strip_prefix("model name") {
-                if let Some(v) = rest.split(':').nth(1) {
-                    return v.trim().to_string();
-                }
+            if let Some(rest) = line.strip_prefix("model name")
+                && let Some(v) = rest.split(':').nth(1)
+            {
+                return v.trim().to_string();
             }
         }
     }
@@ -128,40 +139,52 @@ impl Default for SystemMem {
 
 impl SystemMem {
     pub fn tick(&mut self) {
-        if let Ok(s) = fs::read_to_string("/proc/meminfo") {
-            for line in s.lines() {
-                let mut it = line.split_whitespace();
-                let key = it.next().unwrap_or("");
-                let val = it.next().and_then(|v| v.parse::<u64>().ok());
-                let Some(v) = val else { continue };
-                match key {
-                    "MemTotal:" => self.mem_total_kb = v,
-                    "MemAvailable:" => self.mem_avail_kb = v,
-                    "SwapTotal:" => self.swap_total_kb = v,
-                    "SwapFree:" => self.swap_free_kb = v,
-                    _ => {}
-                }
+        if let Ok(contents) = fs::read_to_string("/proc/meminfo") {
+            self.update_meminfo(&contents);
+        }
+        if let Ok(contents) = fs::read_to_string("/proc/loadavg") {
+            self.update_loadavg(&contents);
+        }
+    }
+
+    fn update_meminfo(&mut self, contents: &str) {
+        for line in contents.lines() {
+            let mut fields = line.split_whitespace();
+            let Some(key) = fields.next() else { continue };
+            let Some(value) = fields.next().and_then(|value| value.parse::<u64>().ok()) else {
+                continue;
+            };
+            match key {
+                "MemTotal:" => self.mem_total_kb = value,
+                "MemAvailable:" => self.mem_avail_kb = value,
+                "SwapTotal:" => self.swap_total_kb = value,
+                "SwapFree:" => self.swap_free_kb = value,
+                _ => {}
             }
         }
-        if let Ok(s) = fs::read_to_string("/proc/loadavg") {
-            let parts: Vec<&str> = s.split_whitespace().collect();
-            if parts.len() >= 3 {
-                self.load1 = parts[0].parse().unwrap_or(0.0);
-                self.load5 = parts[1].parse().unwrap_or(0.0);
-                self.load15 = parts[2].parse().unwrap_or(0.0);
-            }
+    }
+
+    fn update_loadavg(&mut self, contents: &str) {
+        let mut fields = contents.split_whitespace();
+        let values = (
+            fields.next().and_then(|value| value.parse().ok()),
+            fields.next().and_then(|value| value.parse().ok()),
+            fields.next().and_then(|value| value.parse().ok()),
+        );
+        if let (Some(load1), Some(load5), Some(load15)) = values {
+            (self.load1, self.load5, self.load15) = (load1, load5, load15);
         }
     }
 
     pub fn mem_used_pct(&self) -> f64 {
         let total = self.mem_total_kb.max(1);
-        (1.0 - self.mem_avail_kb as f64 / total as f64) * 100.0
+        ((1.0 - self.mem_avail_kb as f64 / total as f64) * 100.0).clamp(0.0, 100.0)
     }
     pub fn swap_used_pct(&self) -> f64 {
         if self.swap_total_kb == 0 {
             0.0
         } else {
-            (1.0 - self.swap_free_kb as f64 / self.swap_total_kb as f64) * 100.0
+            ((1.0 - self.swap_free_kb as f64 / self.swap_total_kb as f64) * 100.0).clamp(0.0, 100.0)
         }
     }
     pub fn mem_used_gb(&self) -> f64 {
@@ -175,5 +198,71 @@ impl SystemMem {
     }
     pub fn swap_total_gb(&self) -> f64 {
         self.swap_total_kb as f64 / 1_048_576.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SystemMem, parse_cpu_line};
+
+    #[test]
+    fn parse_cpu_line_counts_idle_and_excludes_guest_times() {
+        let (total, idle) =
+            parse_cpu_line("cpu 100 20 30 400 50 6 7 8 9 10").expect("valid aggregate CPU line");
+
+        assert_eq!(total, 621);
+        assert_eq!(idle, 450);
+    }
+
+    #[test]
+    fn parse_cpu_line_rejects_incomplete_or_invalid_data() {
+        assert_eq!(parse_cpu_line("cpu 1 2 3"), None);
+        assert_eq!(parse_cpu_line("cpu 1 2 invalid 4"), None);
+    }
+
+    #[test]
+    fn system_memory_parsers_update_known_fields() {
+        let mut memory = SystemMem::default();
+        memory.update_meminfo(
+            "MemTotal: 1048576 kB\nMemAvailable: 262144 kB\n\
+             SwapTotal: 524288 kB\nSwapFree: 131072 kB\nIgnored: 99 kB\n",
+        );
+        memory.update_loadavg("1.25 2.50 3.75 1/100 123\n");
+
+        assert_eq!(memory.mem_total_kb, 1_048_576);
+        assert_eq!(memory.mem_avail_kb, 262_144);
+        assert_eq!(memory.swap_total_kb, 524_288);
+        assert_eq!(memory.swap_free_kb, 131_072);
+        assert_eq!(
+            (memory.load1, memory.load5, memory.load15),
+            (1.25, 2.5, 3.75)
+        );
+        assert_eq!(memory.mem_used_pct(), 75.0);
+        assert_eq!(memory.swap_used_pct(), 75.0);
+    }
+
+    #[test]
+    fn malformed_load_average_preserves_previous_values() {
+        let mut memory = SystemMem {
+            load1: 1.0,
+            load5: 2.0,
+            load15: 3.0,
+            ..SystemMem::default()
+        };
+        memory.update_loadavg("invalid 4.0 5.0");
+        assert_eq!((memory.load1, memory.load5, memory.load15), (1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn memory_percentages_are_bounded() {
+        let memory = SystemMem {
+            mem_total_kb: 10,
+            mem_avail_kb: 20,
+            swap_total_kb: 10,
+            swap_free_kb: 20,
+            ..SystemMem::default()
+        };
+        assert_eq!(memory.mem_used_pct(), 0.0);
+        assert_eq!(memory.swap_used_pct(), 0.0);
     }
 }
