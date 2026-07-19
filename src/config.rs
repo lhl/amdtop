@@ -1,5 +1,5 @@
 //! Persisted UI state (section collapse flags). Stored as JSON under
-//! ~/.config/amdgpu-top-tui2/state.json.
+//! ~/.config/amdtop/state.json.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -22,7 +22,7 @@ pub struct CollapseState {
 
 fn state_path() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
-    Some(PathBuf::from(home).join(".config/amdgpu-top-tui2/state.json"))
+    Some(PathBuf::from(home).join(".config/amdtop/state.json"))
 }
 
 impl CollapseState {

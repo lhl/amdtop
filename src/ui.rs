@@ -132,7 +132,7 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     let now = clock_string();
     let line = Line::from(vec![
         Span::styled(
-            " amdgpu-top-tui2 ",
+            " amdtop ",
             Style::default().fg(app.theme.hi_fg()).add_modifier(Modifier::BOLD),
         ),
         Span::styled(

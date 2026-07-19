@@ -1,26 +1,22 @@
-# amdgpu-top-tui2
+# amdtop
 
-An alternate [nvitop](https://github.com/XuehaiPan/nvitop)/[btop](https://github.com/aristocratos/btop)-style
-terminal UI for AMD systems — CPU, AMD GPUs (discrete *and* APUs), and the
-Strix Halo XDNA NPU — built on top of
-[`amdgpu_top`](https://github.com/Umio-Yasuno/amdgpu_top)'s `libamdgpu_top`
-backend.
+**amdtop is an independent terminal system monitor for AMD systems.** It is
+inspired by the modern TUI visual style of
+[nvitop](https://github.com/XuehaiPan/nvitop) and
+[btop](https://github.com/aristocratos/btop), and leverages
+[`libamdgpu_top`](https://crates.io/crates/libamdgpu_top) for AMD GPU
+telemetry. It monitors CPUs, AMD GPUs (discrete and APUs), and Strix Halo XDNA
+NPUs.
 
-![amdgpu-top-tui2 screenshot](docs/screenshot.png)
-
-> **This is an add-on for [`amdgpu_top`](https://github.com/Umio-Yasuno/amdgpu_top), not a standalone tool.**
-> All telemetry comes from `libamdgpu_top` (the same library that powers
-> `amdgpu_top`'s `--tui`, `--gui`, and `--json` frontends). Think of this as a
-> fourth, alternate TUI frontend — hence `tui2` — focused on the nvitop/btop
-> aesthetic. Thanks [@Umio-Yasuno](https://github.com/Umio-Yasuno) for
-> the backend that does all the hard work.
+![amdtop screenshot](docs/screenshot.png)
 
 ## Why
 
 `nvitop` is great but NVIDIA-only. On AMD — especially a Strix Halo box with an
 APU **and** an XDNA NPU, or a workstation with multiple AMD cards there was no 
-single TUI with that look-and-feel. This fills that gap by rendering 
-`libamdgpu_top`'s data in a modern, themeable layout.
+single TUI with that look-and-feel. amdtop fills that gap by combining its own
+CPU/system monitoring with `libamdgpu_top` telemetry in a modern, themeable
+layout.
 
 ## Features
 
@@ -43,13 +39,12 @@ Requires a **Rust toolchain** and **`libdrm` development headers**, plus an AMD
 GPU/APU running the `amdgpu` kernel driver.
 
 ```sh
-cargo install --git https://github.com/lhl/amdgpu_top_tui2
+cargo install --git https://github.com/lhl/amdtop
 ```
 
-This installs the `amdgpu-top-tui2` binary. The `libamdgpu_top` backend is
-pulled in and compiled automatically (statically linked) — you do **not** need
-the `amdgpu_top` binary installed separately. The only runtime dependency is
-`libdrm_amdgpu.so.1`, which is present on any system with AMD drivers.
+This installs the `amdtop` binary. Its `libamdgpu_top` dependency is compiled
+automatically. The only runtime dependency is `libdrm_amdgpu.so.1`, which is
+present on systems with AMD drivers.
 
 Distro packages for the `libdrm` build headers:
 
@@ -61,7 +56,7 @@ Distro packages for the `libdrm` build headers:
 
 ### NPU telemetry requirements
 
-`amdgpu-top-tui2` detects AMD XDNA/Ryzen AI NPUs through the Linux accel
+`amdtop` detects AMD XDNA/Ryzen AI NPUs through the Linux accel
 class (`/sys/class/accel` and `/dev/accel/accel*`). On systems like Strix Halo,
 that is enough for the NPU pane to show the device name, firmware, and BDF.
 
@@ -120,14 +115,10 @@ not a replacement for an fdinfo-capable kernel module. The older AUR
 XDNA stacks; prefer `amdxdna-dkms` for the kernel driver unless you specifically
 need to test that older stack.
 
-> **Note:** `cargo install` from crates.io is not currently possible because we
-> depend on `libamdgpu_top` via git (it is not published to crates.io). Prebuilt
-> release binaries / AUR packaging are planned.
-
 ## Usage
 
 ```sh
-amdgpu-top-tui2
+amdtop
 ```
 
 ### Keybindings
@@ -167,7 +158,7 @@ files are installed.
 
 ## Credits
 
-- Backend: [`libamdgpu_top`](https://github.com/Umio-Yasuno/amdgpu_top) by Umio-Yasuno
+- AMD GPU telemetry: [`libamdgpu_top`](https://crates.io/crates/libamdgpu_top) by Umio-Yasuno
 - Inspiration: [nvitop](https://github.com/XuehaiPan/nvitop), [btop](https://github.com/aristocratos/btop)
 
 ## License
