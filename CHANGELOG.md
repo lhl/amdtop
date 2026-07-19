@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Refresh GPU process indexes periodically so applications started or restarted
+  after amdtop launches appear in the process table.
+
 ## [0.2.2] - 2026-07-19
 
 ### Changed

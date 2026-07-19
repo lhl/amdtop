@@ -5,8 +5,8 @@ use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use libamdgpu_top::DevicePath;
 use libamdgpu_top::app::{AppAmdgpuTop, AppOption};
+use libamdgpu_top::{DevicePath, stat};
 
 use crate::config::CollapseState;
 use crate::cpu::{CpuSampler, SystemMem, cpu_model};
@@ -14,6 +14,7 @@ use crate::history::History;
 use crate::theme::{DEFAULT_THEME, Theme};
 
 const HISTORY_CAPACITY: usize = 80;
+const PROCESS_INDEX_REFRESH_SECS: u64 = 5;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum Section {
@@ -73,6 +74,16 @@ impl App {
         let n = apps.len();
         let npu_info = detect_npu(&apps);
         let has_npu = npu_info.is_some();
+
+        // AppAmdgpuTop populates its shared process indexes once during
+        // construction. The library's frontends start this worker separately;
+        // without it, processes created or restarted after amdtop starts never
+        // appear in the process table.
+        let mut process_device_paths = dps;
+        if let Some(xdna_device_path) = apps.iter().find_map(|app| app.xdna_device_path.as_ref()) {
+            process_device_paths.push(xdna_device_path.clone());
+        }
+        stat::spawn_update_index_thread(process_device_paths, PROCESS_INDEX_REFRESH_SECS);
 
         let collapse = CollapseState::load();
         let theme_name = if collapse.theme.is_empty() {
