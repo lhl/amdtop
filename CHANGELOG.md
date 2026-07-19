@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add a maintainer publishing checklist and a GitHub Actions OIDC workflow for
+  tokenless crates.io releases.
+
 ### Fixed
 
 - Refresh GPU process indexes periodically so applications started or restarted

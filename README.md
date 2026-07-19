@@ -191,6 +191,11 @@ Any btop `.theme` file works (hex `#RRGGBB`, 2-char grayscale `#BW`, and
 default is `onedark`; a minimal everforest fallback is bundled in case no theme
 files are installed.
 
+## Releasing
+
+Maintainers should follow the [publishing checklist](docs/PUBLISH.md), including
+the crates.io trusted-publishing setup and release validation gates.
+
 ## Credits
 
 - AMD GPU telemetry: [`libamdgpu_top`](https://crates.io/crates/libamdgpu_top) by Umio-Yasuno
