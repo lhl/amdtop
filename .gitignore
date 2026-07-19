@@ -2,3 +2,5 @@
 /reference
 /.pi
 *.rs.bk
+__pycache__/
+*.py[cod]

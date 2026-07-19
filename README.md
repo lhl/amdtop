@@ -195,7 +195,8 @@ files are installed.
 ## Releasing
 
 Maintainers should follow the [publishing checklist](docs/PUBLISH.md), including
-the crates.io trusted-publishing setup and release validation gates.
+the crates.io trusted-publishing setup and release validation gates. Use the
+[screenshot generation runbook](docs/SCREENSHOT.md) when updating the TUI image.
 
 ## Credits
 

@@ -79,6 +79,9 @@ deleted.
 - [ ] Re-read `README.md`, `CHANGELOG.md`, and this checklist. Update them when
       installation, requirements, telemetry behavior, keybindings, or the
       release process changed.
+- [ ] If the TUI layout or displayed telemetry changed, follow the
+      [screenshot generation runbook](SCREENSHOT.md), inspect the image and text
+      dump, and update `docs/screenshot.png` when it improves the documentation.
 - [ ] Review any `libamdgpu_top` version change explicitly; backend updates can
       affect telemetry and GPU power-management behavior without an amdtop API
       change.

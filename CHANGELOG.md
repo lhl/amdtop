@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Show resident system memory as `MEM` alongside per-process VRAM/GTT usage.
+- Add a reproducible screenshot generator with configurable terminal geometry,
+  fonts, cell dimensions, representative CPU load, and frame selection.
 
 ## [0.2.3] - 2026-07-19
 
