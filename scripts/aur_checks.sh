@@ -25,6 +25,38 @@ aur_check_srcinfo() {
   fi
 }
 
+# Wait for aurweb's public package index after the Git push has succeeded.
+# AUR_INDEXED_VERSION is retained for a precise timeout diagnostic.
+aur_wait_for_index() {
+  local expected_version=$1
+  local attempts=${2:-120}
+  local interval=${3:-5}
+  local endpoint=${4:-'https://aur.archlinux.org/rpc/v5/info?arg[]=amdtop'}
+  local attempt indexed_version=''
+
+  [[ "$attempts" =~ ^[1-9][0-9]*$ ]] || {
+    printf 'AUR index attempts must be a positive integer\n' >&2
+    return 1
+  }
+  [[ "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+    printf 'AUR index interval must be a non-negative number\n' >&2
+    return 1
+  }
+
+  AUR_INDEXED_VERSION=''
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if indexed_version="$(
+      curl --fail --silent --show-error --header 'Cache-Control: no-cache' "$endpoint" |
+        jq -er '.results[0].Version'
+    )"; then
+      AUR_INDEXED_VERSION=$indexed_version
+      [[ "$indexed_version" == "$expected_version" ]] && return 0
+    fi
+    ((attempt < attempts)) && sleep "$interval"
+  done
+  return 1
+}
+
 # Verify that the built binary package redistributes upstream legal notices.
 aur_check_package_notices() {
   local package_root=$1

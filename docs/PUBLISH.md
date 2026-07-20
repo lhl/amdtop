@@ -314,7 +314,9 @@ The script:
 7. commits and pushes first to the AUR and then to the GitHub mirror only after
    either `publish amdtop X.Y.Z-1` is typed exactly or `--publish` was supplied;
    and
-8. waits for the AUR RPC to report the expected `X.Y.Z-N` version.
+8. waits up to ten minutes for the AUR RPC to report the expected
+   `X.Y.Z-N` version (override locally with `AUR_INDEX_ATTEMPTS` and
+   `AUR_INDEX_INTERVAL` only for troubleshooting).
 
 - [ ] Review upstream dependency, license, asset, and build-system changes; do
       not treat a passing script as approval for an automatic version bump.
@@ -347,6 +349,12 @@ curl -fsS 'https://aur.archlinux.org/rpc/v5/info?arg[]=amdtop' |
       do not mark the release complete while it still reports the prior version.
 - [ ] Confirm the AUR and GitHub mirror point to the same commit.
 - [ ] Confirm both the upstream and AUR working trees are clean.
+
+A successful Git push can precede AUR package-page/RPC indexing by several
+minutes. If the helper times out after both pushes, verify the AUR and GitHub
+refs and wait for the public index; do not create another commit merely to
+refresh aurweb. Rerunning the helper against the already reviewed commit is
+safe, but it will repeat the build checks.
 
 A broken AUR recipe does not justify moving the upstream tag or yanking a
 usable crates.io release; fix the recipe and publish a new `pkgrel`.

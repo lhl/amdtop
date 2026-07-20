@@ -48,4 +48,25 @@ for missing in LICENSE NOTICE THIRD_PARTY.md; do
   mv "$tmp_dir/$missing" "$license_dir/$missing"
 done
 
+mock_indexed_version=0.2.5-1
+curl() {
+  printf '{"results":[{"Version":"%s"}]}\n' "$mock_indexed_version"
+}
+sleep_count=0
+sleep() {
+  sleep_count=$((sleep_count + 1))
+}
+AUR_INDEXED_VERSION=''
+aur_wait_for_index 0.2.5-1 3 0
+[[ "$AUR_INDEXED_VERSION" == 0.2.5-1 ]] || fail 'indexed version was not retained'
+[[ "$sleep_count" == 0 ]] || fail 'successful index check slept unexpectedly'
+
+mock_indexed_version=0.2.4-1
+AUR_INDEXED_VERSION=''
+expect_failure aur_wait_for_index 0.2.5-1 3 0
+[[ "$AUR_INDEXED_VERSION" == 0.2.4-1 ]] || fail 'stale indexed version was not retained'
+[[ "$sleep_count" == 2 ]] || fail "expected two polling sleeps, got $sleep_count"
+expect_failure aur_wait_for_index 0.2.5-1 0 0
+expect_failure aur_wait_for_index 0.2.5-1 1 invalid
+
 printf 'AUR release checks passed\n'

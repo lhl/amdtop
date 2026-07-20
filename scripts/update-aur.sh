@@ -260,18 +260,11 @@ note 'Updating the GitHub packaging mirror'
 git -C "$aur_dir" push github HEAD:master
 
 note "Waiting for the AUR to index amdtop $expected_version"
-indexed_version=''
-for (( attempt = 1; attempt <= 10; attempt++ )); do
-  if indexed_version="$(
-    curl --fail --silent --show-error \
-      'https://aur.archlinux.org/rpc/v5/info?arg[]=amdtop' |
-      jq -er '.results[0].Version'
-  )" && [[ "$indexed_version" == "$expected_version" ]]; then
-    break
-  fi
-  sleep 3
-done
-[[ "$indexed_version" == "$expected_version" ]] ||
-  fail "AUR indexed '$indexed_version' instead of '$expected_version'"
+aur_index_attempts=${AUR_INDEX_ATTEMPTS:-120}
+aur_index_interval=${AUR_INDEX_INTERVAL:-5}
+if ! aur_wait_for_index \
+  "$expected_version" "$aur_index_attempts" "$aur_index_interval"; then
+  fail "AUR pushes completed, but the public index still reports '${AUR_INDEXED_VERSION:-unavailable}' instead of '$expected_version'; verify the AUR page before retrying publication"
+fi
 
 note "Published and verified amdtop $expected_version"
