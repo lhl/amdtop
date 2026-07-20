@@ -1,0 +1,72 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/ayu.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+
+schema = 1
+name = "ayu"
+
+[ui]
+background = "#0B0E14"
+foreground = "#BFBDB6"
+title = "#BFBDB6"
+highlight = "#E6B450"
+selected_background = "#E6B450"
+selected_foreground = "#f8f8f2"
+inactive = "#565B66"
+graph_text = "#BFBDB6"
+misc = "#DFBFFF"
+
+[stats]
+clock = "#DFBFFF"
+power = "#BFBDB6"
+fan = "#BFBDB6"
+bandwidth = "#BFBDB6"
+
+[borders]
+cpu = "#DFBFFF"
+gpu = "#95E6CB"
+memory = "#95E6CB"
+npu = "#F28779"
+processes = "#E6B673"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#DFBFFF" },
+  { at = 0.5, color = "#D2A6FF" },
+  { at = 1.0, color = "#A37ACC" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#DFBFFF" },
+  { at = 0.5, color = "#D2A6FF" },
+  { at = 1.0, color = "#A37ACC" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#DFBFFF" },
+  { at = 0.5, color = "#D2A6FF" },
+  { at = 1.0, color = "#A37ACC" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#95E6CB" },
+  { at = 0.5, color = "#95E6CB" },
+  { at = 1.0, color = "#4CBF99" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#FFCC66" },
+  { at = 0.5, color = "#E6B450" },
+  { at = 1.0, color = "#FFAA33" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#FFCC66" },
+  { at = 0.5, color = "#E6B450" },
+  { at = 1.0, color = "#FFAA33" },
+]

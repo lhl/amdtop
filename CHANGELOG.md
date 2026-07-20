@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-07-20
+
+### Added
+
+- Bundle 41 native TOML themes with semantic CPU, GPU, memory, NPU, process,
+  telemetry, border, and positioned-gradient roles, without requiring btop.
+- Show adaptive GPU memory-controller utilization and SoC DRAM throughput,
+  combining both when the hardware exposes both metrics.
+- Refresh the canonical screenshot at 120×48 with Tokyo Night, real Ghostty
+  terminal-graphics rendering, and a bounded synthetic GPU activity sweep.
+
+### Changed
+
+- Make `tokyo-night` the default theme for new installations.
+- Relicense amdtop from MIT to Apache-2.0 and record bundled theme provenance
+  and original palette sources in `THIRD_PARTY.md`.
+- Add the published AUR package as an Arch installation option, with a sibling
+  packaging repository, maintainer runbook, and `scripts/update-aur.sh` helper
+  supporting reviewed interactive or explicitly authorized agent updates after
+  each verified crates.io release.
+
 ## [0.2.4] - 2026-07-20
 
 ### Added
@@ -110,7 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Collapsible sections, persistent UI state, btop theme support, and selectable
   gauge styles.
 
-[Unreleased]: https://github.com/lhl/amdtop/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/lhl/amdtop/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/lhl/amdtop/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/lhl/amdtop/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/lhl/amdtop/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/lhl/amdtop/compare/v0.2.1...v0.2.2

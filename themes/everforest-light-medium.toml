@@ -1,0 +1,72 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/everforest-light-medium.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+
+schema = 1
+name = "everforest-light-medium"
+
+[ui]
+background = "#fdf6e3"
+foreground = "#5c6a72"
+title = "#5c6a72"
+highlight = "#df69ba"
+selected_background = "#4F585E"
+selected_foreground = "#dfa000"
+inactive = "#9DA9A0"
+graph_text = "#5c6a72"
+misc = "#8da101"
+
+[stats]
+clock = "#8da101"
+power = "#5c6a72"
+fan = "#5c6a72"
+bandwidth = "#5c6a72"
+
+[borders]
+cpu = "#4F585E"
+gpu = "#4F585E"
+memory = "#4F585E"
+npu = "#4F585E"
+processes = "#4F585E"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#8da101" },
+  { at = 0.5, color = "#dfa000" },
+  { at = 1.0, color = "#f85552" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#8da101" },
+  { at = 0.5, color = "#dfa000" },
+  { at = 1.0, color = "#f85552" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#8da101" },
+  { at = 0.5, color = "#dfa000" },
+  { at = 1.0, color = "#f85552" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#8da101" },
+  { at = 0.5, color = "#dfa000" },
+  { at = 1.0, color = "#f85552" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#8da101" },
+  { at = 0.5, color = "#df69ba" },
+  { at = 1.0, color = "#f85552" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#8da101" },
+  { at = 0.5, color = "#df69ba" },
+  { at = 1.0, color = "#f85552" },
+]

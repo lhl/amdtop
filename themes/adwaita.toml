@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/adwaita.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop Adwaita theme
+#by flipflop133
+
+schema = 1
+name = "adwaita"
+
+[ui]
+background = "#f6f5f4"
+foreground = "#2e3436"
+title = "#2e3436"
+highlight = "#1a5fb4"
+selected_background = "#1c71d8"
+selected_foreground = "#ffffff"
+inactive = "#5e5c64"
+graph_text = "#2e3436"
+misc = "#1a5fb4"
+
+[stats]
+clock = "#1a5fb4"
+power = "#2e3436"
+fan = "#2e3436"
+bandwidth = "#2e3436"
+
+[borders]
+cpu = "#2e3436"
+gpu = "#3d3c14"
+memory = "#3d3c14"
+npu = "#2e3436"
+processes = "#2e3436"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#1a5fb4" },
+  { at = 0.5, color = "#1a5fb4" },
+  { at = 1.0, color = "#c01c28" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#1a5fb4" },
+  { at = 0.5, color = "#1a5fb4" },
+  { at = 1.0, color = "#c01c28" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#1a5fb4" },
+  { at = 0.5, color = "#1a5fb4" },
+  { at = 1.0, color = "#c01c28" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#1a5fb4" },
+  { at = 0.5, color = "#1a5fb4" },
+  { at = 1.0, color = "#c01c28" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#1a5fb4" },
+  { at = 0.5, color = "#1a5fb4" },
+  { at = 1.0, color = "#c01c28" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#1a5fb4" },
+  { at = 0.5, color = "#1a5fb4" },
+  { at = 1.0, color = "#c01c28" },
+]

@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/kanagawa-lotus.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Bashtop Kanagawa-lotus (https://github.com/rebelot/kanagawa.nvim) theme
+# By: philikarus
+
+schema = 1
+name = "kanagawa-lotus"
+
+[ui]
+background = "#F2ECBC"
+foreground = "#545464"
+title = "#545464"
+highlight = "#C84053"
+selected_background = "#c9cbd1"
+selected_foreground = "#43436c"
+inactive = "#8A8980"
+graph_text = "#545464"
+misc = "#597B75"
+
+[stats]
+clock = "#597B75"
+power = "#545464"
+fan = "#545464"
+bandwidth = "#545464"
+
+[borders]
+cpu = "#8A8980"
+gpu = "#8A8980"
+memory = "#8A8980"
+npu = "#8A8980"
+processes = "#8A8980"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#6E915F" },
+  { at = 0.5, color = "#CC6D00" },
+  { at = 1.0, color = "#D7474B" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#6E915F" },
+  { at = 0.5, color = "#CC6D00" },
+  { at = 1.0, color = "#D7474B" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#6E915F" },
+  { at = 0.5, color = "#CC6D00" },
+  { at = 1.0, color = "#D7474B" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#B5CBD2" },
+  { at = 0.5, color = "#4d699b" },
+  { at = 1.0, color = "#4e8ca2" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#6E915F" },
+  { at = 0.5, color = "#CC6D00" },
+  { at = 1.0, color = "#C84053" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#6E915F" },
+  { at = 0.5, color = "#CC6D00" },
+  { at = 1.0, color = "#C84053" },
+]

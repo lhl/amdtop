@@ -1,0 +1,73 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/night-owl.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop theme with night-owl colors
+#by zkourouma
+
+schema = 1
+name = "night-owl"
+
+[ui]
+background = "#011627"
+foreground = "#d6deeb"
+title = "#ffffff"
+highlight = "#addb67"
+selected_background = "#000000"
+selected_foreground = "#ffeb95"
+inactive = "#575656"
+graph_text = "#585858"
+misc = "#22da6e"
+
+[stats]
+clock = "#22da6e"
+power = "#585858"
+fan = "#585858"
+bandwidth = "#585858"
+
+[borders]
+cpu = "#ffffff"
+gpu = "#ffffff"
+memory = "#ffffff"
+npu = "#ffffff"
+processes = "#ffffff"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#82aaff" },
+  { at = 0.5, color = "#c792ea" },
+  { at = 1.0, color = "#fb4394" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#22da6e" },
+  { at = 0.5, color = "#addb67" },
+  { at = 1.0, color = "#ef5350" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#22da6e" },
+  { at = 0.5, color = "#addb67" },
+  { at = 1.0, color = "#ef5350" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#ef5350" },
+  { at = 1.0, color = "#ef5350" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#22da6e" },
+  { at = 0.5, color = "#addb67" },
+  { at = 1.0, color = "#ef5350" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#22da6e" },
+  { at = 0.5, color = "#addb67" },
+  { at = 1.0, color = "#ef5350" },
+]

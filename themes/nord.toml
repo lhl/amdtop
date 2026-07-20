@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/nord.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop theme with nord palette (https://www.nordtheme.com)
+#by Justin Zobel <justin.zobel@gmail.com>
+
+schema = 1
+name = "nord"
+
+[ui]
+background = "#2E3440"
+foreground = "#D8DEE9"
+title = "#8FBCBB"
+highlight = "#5E81AC"
+selected_background = "#4C566A"
+selected_foreground = "#ECEFF4"
+inactive = "#4C566A"
+graph_text = "#D8DEE9"
+misc = "#5E81AC"
+
+[stats]
+clock = "#5E81AC"
+power = "#D8DEE9"
+fan = "#D8DEE9"
+bandwidth = "#D8DEE9"
+
+[borders]
+cpu = "#4C566A"
+gpu = "#4C566A"
+memory = "#4C566A"
+npu = "#4C566A"
+processes = "#4C566A"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#81A1C1" },
+  { at = 0.5, color = "#88C0D0" },
+  { at = 1.0, color = "#ECEFF4" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#81A1C1" },
+  { at = 0.5, color = "#88C0D0" },
+  { at = 1.0, color = "#ECEFF4" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#81A1C1" },
+  { at = 0.5, color = "#88C0D0" },
+  { at = 1.0, color = "#ECEFF4" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#81A1C1" },
+  { at = 0.5, color = "#88C0D0" },
+  { at = 1.0, color = "#ECEFF4" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#81A1C1" },
+  { at = 0.5, color = "#88C0D0" },
+  { at = 1.0, color = "#ECEFF4" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#81A1C1" },
+  { at = 0.5, color = "#88C0D0" },
+  { at = 1.0, color = "#ECEFF4" },
+]

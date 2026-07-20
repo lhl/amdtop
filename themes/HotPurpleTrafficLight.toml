@@ -1,0 +1,73 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/HotPurpleTrafficLight.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#by Pete Allebone - mess with the best... you know the rest. <catch me at: peter at allebone dot org>
+
+schema = 1
+name = "HotPurpleTrafficLight"
+
+[ui]
+background = "#000000"
+foreground = "#d1d1e0"
+title = "#d1d1e0"
+highlight = "#9933ff"
+selected_background = "#6666ff"
+selected_foreground = "#d1d1e0"
+inactive = "#9999ff"
+graph_text = "#9933ff"
+misc = "#9933ff"
+
+[stats]
+clock = "#9933ff"
+power = "#9933ff"
+fan = "#9933ff"
+bandwidth = "#9933ff"
+
+[borders]
+cpu = "#a64dff"
+gpu = "#a64dff"
+memory = "#a64dff"
+npu = "#a64dff"
+processes = "#a64dff"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#00ff00" },
+  { at = 0.5, color = "#ff9933" },
+  { at = 1.0, color = "#ff0000" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#00ff00" },
+  { at = 0.5, color = "#ccff66" },
+  { at = 1.0, color = "#ff0000" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#00ff00" },
+  { at = 0.5, color = "#ccff66" },
+  { at = 1.0, color = "#ff0000" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#00ff00" },
+  { at = 0.5, color = "#ccff66" },
+  { at = 1.0, color = "#ff0000" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#9999ff" },
+  { at = 0.5, color = "#4d4dff" },
+  { at = 1.0, color = "#a64dff" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#9999ff" },
+  { at = 0.5, color = "#4d4dff" },
+  { at = 1.0, color = "#a64dff" },
+]

@@ -1,0 +1,72 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/dusklight.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bpytop theme comprised of blues, oranges, cyan, and yellow.
+#by Drazil100
+
+schema = 1
+name = "dusklight"
+
+[ui]
+background = "#04142E"
+foreground = "#99DFFF"
+title = "#99FFFF"
+highlight = "#FF7F00"
+selected_background = "#722B01"
+selected_foreground = "#99FFFF"
+inactive = "#052E51"
+graph_text = "#79A1B4"
+misc = "#B46718"
+
+[stats]
+clock = "#B46718"
+power = "#79A1B4"
+fan = "#79A1B4"
+bandwidth = "#79A1B4"
+
+[borders]
+cpu = "#00FFFF"
+gpu = "#00FFFF"
+memory = "#00FFFF"
+npu = "#00FFFF"
+processes = "#00FFFF"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#00ADFF" },
+  { at = 0.5, color = "#00FFFF" },
+  { at = 1.0, color = "#FFF86B" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#00D4FF" },
+  { at = 0.5, color = "#FFF86B" },
+  { at = 1.0, color = "#FF7F00" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#00D4FF" },
+  { at = 0.5, color = "#FFF86B" },
+  { at = 1.0, color = "#FF7F00" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#B46718" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#00D4FF" },
+  { at = 0.5, color = "#FFF86B" },
+  { at = 1.0, color = "#FF7F00" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#00D4FF" },
+  { at = 0.5, color = "#FFF86B" },
+  { at = 1.0, color = "#FF7F00" },
+]

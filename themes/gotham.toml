@@ -1,0 +1,76 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/gotham.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# btop theme with the Gotham colorscheme for vim/neovim
+# Credit to Andrea Lopardi (https://github.com/whatyouhide/vim-gotham)
+# Adapted by jrebs (https://github.com/jrebs)
+#theme[inactive_fg]="#a89984"
+
+schema = 1
+name = "gotham"
+
+[ui]
+background = "#2E3440"
+foreground = "#99d1ce"
+title = "#2aa889"
+highlight = "#ffffff"
+selected_background = "#0a3749"
+selected_foreground = "#99d1ce"
+inactive = "#403b34"
+graph_text = "#99d1ce"
+misc = "#a89984"
+
+[stats]
+clock = "#a89984"
+power = "#99d1ce"
+fan = "#99d1ce"
+bandwidth = "#99d1ce"
+
+[borders]
+cpu = "#99d1ce"
+gpu = "#99d1ce"
+memory = "#99d1ce"
+npu = "#99d1ce"
+processes = "#99d1ce"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#2aa889" },
+  { at = 0.5, color = "#99d1ce" },
+  { at = 1.0, color = "#ffffff" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#2aa889" },
+  { at = 0.5, color = "#99d1ce" },
+  { at = 1.0, color = "#ffffff" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#2aa889" },
+  { at = 0.5, color = "#99d1ce" },
+  { at = 1.0, color = "#ffffff" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#2aa889" },
+  { at = 0.5, color = "#99d1ce" },
+  { at = 1.0, color = "#ffffff" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#2aa889" },
+  { at = 0.5, color = "#99d1ce" },
+  { at = 1.0, color = "#ffffff" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#2aa889" },
+  { at = 0.5, color = "#99d1ce" },
+  { at = 1.0, color = "#ffffff" },
+]

@@ -22,7 +22,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         let line = Line::from(vec![
             Span::styled(
                 format!(" {:>3.0}% ", app.cpu.cpu_percent.round()),
-                Style::default().fg(app.theme.util_color(app.cpu.cpu_percent, UtilKind::Gpu)),
+                Style::default().fg(app.theme.util_color(app.cpu.cpu_percent, UtilKind::Cpu)),
             ),
             Span::styled(
                 format!(
@@ -62,7 +62,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(
         Paragraph::new(render_bar(
             app,
-            gauge::Bar::new("CPU", Some(app.cpu.cpu_percent), w, Kind::Gpu)
+            gauge::Bar::new("CPU", Some(app.cpu.cpu_percent), w, Kind::Cpu)
                 .with_value("", CPU_VALUE_WIDTH),
         )),
         rl[0],
@@ -90,7 +90,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     let stats = Line::from(vec![
         Span::styled(
             format!(" {:.2} GHz ", f64::from(freq) / 1000.0),
-            Style::default().fg(app.theme.proc_misc()),
+            Style::default().fg(app.theme.clock()),
         ),
         Span::styled(
             format!(
@@ -104,7 +104,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
                 " {} ",
                 package_power.map_or_else(|| "—".into(), |watts| format!("{watts}W"))
             ),
-            Style::default().fg(app.theme.graph_text()),
+            Style::default().fg(app.theme.power()),
         ),
         Span::styled(
             format!(
@@ -203,7 +203,7 @@ fn draw_core_grid(f: &mut Frame, area: Rect, app: &App) {
             }
             spans.push(Span::styled(
                 format!(" {pct_s}"),
-                Style::default().fg(app.theme.util_color(pct, UtilKind::Gpu)),
+                Style::default().fg(app.theme.util_color(pct, UtilKind::Cpu)),
             ));
             f.render_widget(Paragraph::new(Line::from(spans)), row_areas[r]);
         }

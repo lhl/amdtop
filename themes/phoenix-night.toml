@@ -1,0 +1,76 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/phoenix-night.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Theme: Phoenix Night
+# By: Firehawke
+# Base theme colors from Pascal Jaeger's tokyo-night
+# Graph theme colors from Pete Allebone's HotPurpleTrafficLight
+
+schema = 1
+name = "phoenix-night"
+
+[ui]
+background = "#1a1b26"
+foreground = "#cfc9c2"
+title = "#cfc9c2"
+highlight = "#7dcfff"
+selected_background = "#414868"
+selected_foreground = "#cfc9c2"
+inactive = "#565f89"
+graph_text = "#cfc9c2"
+misc = "#7dcfff"
+
+[stats]
+clock = "#7dcfff"
+power = "#cfc9c2"
+fan = "#cfc9c2"
+bandwidth = "#cfc9c2"
+
+[borders]
+cpu = "#565f89"
+gpu = "#565f89"
+memory = "#565f89"
+npu = "#565f89"
+processes = "#565f89"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#00ff00" },
+  { at = 0.5, color = "#ff9933" },
+  { at = 1.0, color = "#ff0000" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#00ff00" },
+  { at = 0.5, color = "#ccff66" },
+  { at = 1.0, color = "#ff0000" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#00ff00" },
+  { at = 0.5, color = "#ccff66" },
+  { at = 1.0, color = "#ff0000" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#00ff00" },
+  { at = 0.5, color = "#ccff66" },
+  { at = 1.0, color = "#ff0000" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#9999ff" },
+  { at = 0.5, color = "#4d4dff" },
+  { at = 1.0, color = "#a64dff" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#9999ff" },
+  { at = 0.5, color = "#4d4dff" },
+  { at = 1.0, color = "#a64dff" },
+]

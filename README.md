@@ -26,11 +26,13 @@ layout.
 - **Multi-GPU**: one band per device, labeled by index + PCI bus-id
 - **APU-aware memory**: shows the real GTT (unified system RAM) pool on APUs,
   VRAM on discrete cards — both labeled `MEM`
+- **Adaptive memory-bandwidth telemetry**: shows memory-controller utilization
+  where available alongside SoC DRAM read/write throughput on supported APUs
 - **XDNA NPU**: presence detection on `/sys/class/accel`; utilization + per-context table when the `amdxdna` driver exposes DRM fdinfo telemetry
 - **Process table**: per-process resident system memory (`MEM`), VRAM/GTT,
   and engine usage
-- **All [btop](https://github.com/aristocratos/btop) themes supported** — drops
-  into the same `.theme` files; cycle live with `t`/`T`. Defaults to `onedark`.
+- **41 native bundled themes**: available without btop or external data files;
+  cycle live with `t`/`T`. Defaults to `tokyo-night`.
 - nvitop-style fixed-track gauges with aligned numeric columns; braille area
   graphs with theme-gradient fills
 
@@ -43,6 +45,14 @@ Install from crates.io:
 
 ```sh
 cargo install amdtop
+```
+
+On Arch Linux and derivatives, install the
+[`amdtop`](https://aur.archlinux.org/packages/amdtop) AUR package
+([pkg](https://github.com/lhl/amdtop-aur)):
+
+```sh
+yay -S amdtop
 ```
 
 Or install the latest development version from Git:
@@ -159,8 +169,7 @@ amdtop stores its UI state in:
 $XDG_CONFIG_HOME/amdtop/state.json
 ```
 
-If `XDG_CONFIG_HOME` is unset, it uses `~/.config/amdtop/state.json`. btop theme
-files remain in the standard btop directories listed below.
+If `XDG_CONFIG_HOME` is unset, it uses `~/.config/amdtop/state.json`.
 
 ### GPU power management
 
@@ -178,31 +187,23 @@ Cycle the bar fill glyph with `b`/`B`:
 
 ## Themes
 
-Themes are read from the standard btop locations (first match wins):
+amdtop embeds 41 themes in its binary, so theme selection does not depend on
+btop being installed. Native custom themes use amdtop's versioned TOML format
+and can independently style CPU, GPU, memory, NPU, processes, borders, clocks,
+power, fans, bandwidth, and positioned gradient stops.
 
-```
-$XDG_CONFIG_HOME/btop/themes/
-~/.config/btop/themes/
-/usr/local/share/btop/themes/
-/usr/share/btop/themes/
-```
-
-Any btop `.theme` file works (hex `#RRGGBB`, 2-char grayscale `#BW`, and
-`R G B` decimal color formats are all supported, including gradients). The
-default is `onedark`; a minimal everforest fallback is bundled in case no theme
-files are installed.
-
-## Releasing
-
-Maintainers should follow the [publishing checklist](docs/PUBLISH.md), including
-the crates.io trusted-publishing setup and release validation gates. Use the
-[screenshot generation runbook](docs/SCREENSHOT.md) when updating the TUI image.
+User themes are loaded from `$XDG_CONFIG_HOME/amdtop/themes/` and
+`~/.config/amdtop/themes/`; system themes may be installed under
+`/usr/local/share/amdtop/themes/` or `/usr/share/amdtop/themes/`. A native file
+with the same name as a bundled theme overrides it. See
+[the native theme format](docs/THEMES.md) for the complete schema and examples.
 
 ## Credits
 
 - AMD GPU telemetry: [`libamdgpu_top`](https://crates.io/crates/libamdgpu_top) by Umio-Yasuno
 - Inspiration: [nvitop](https://github.com/XuehaiPan/nvitop), [btop](https://github.com/aristocratos/btop)
+- Themes from btop and original theme authors; see [THIRD_PARTY.md](THIRD_PARTY.md)
 
 ## License
 
-MIT
+Apache-2.0

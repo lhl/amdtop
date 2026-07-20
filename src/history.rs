@@ -42,7 +42,12 @@ impl History {
     /// Render a multi-row braille area graph of the most recent `2*width`
     /// samples. `height` = terminal rows. Values 0..100. Each cell colored by
     /// the theme gradient sampled at the cell's peak value.
-    pub fn braille_graph(&self, width: usize, height: usize, grad: Gradient) -> Vec<Line<'static>> {
+    pub fn braille_graph(
+        &self,
+        width: usize,
+        height: usize,
+        grad: &Gradient,
+    ) -> Vec<Line<'static>> {
         if height == 0 || width == 0 {
             return Vec::new();
         }
@@ -167,13 +172,9 @@ mod tests {
         for value in [0, 25, 50, 75, 100] {
             history.push(value);
         }
-        let gradient = Gradient {
-            start: Color::Red,
-            mid: None,
-            end: None,
-        };
+        let gradient = Gradient::three(Color::Red, Color::Red, Color::Red);
 
-        let graph = history.braille_graph(4, 3, gradient);
+        let graph = history.braille_graph(4, 3, &gradient);
         assert_eq!(graph.len(), 3);
         assert!(graph.iter().all(|line| line.width() == 4));
     }
@@ -181,13 +182,9 @@ mod tests {
     #[test]
     fn braille_graph_handles_empty_dimensions() {
         let history = History::new(8);
-        let gradient = Gradient {
-            start: Color::Red,
-            mid: None,
-            end: None,
-        };
+        let gradient = Gradient::three(Color::Red, Color::Red, Color::Red);
 
-        assert!(history.braille_graph(0, 1, gradient).is_empty());
-        assert!(history.braille_graph(1, 0, gradient).is_empty());
+        assert!(history.braille_graph(0, 1, &gradient).is_empty());
+        assert!(history.braille_graph(1, 0, &gradient).is_empty());
     }
 }

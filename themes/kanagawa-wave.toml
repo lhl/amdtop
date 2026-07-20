@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/kanagawa-wave.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Bashtop Kanagawa-wave (https://github.com/rebelot/kanagawa.nvim) theme
+# By: philikarus
+
+schema = 1
+name = "kanagawa-wave"
+
+[ui]
+background = "#16161D"
+foreground = "#dcd7ba"
+title = "#dcd7ba"
+highlight = "#C34043"
+selected_background = "#223249"
+selected_foreground = "#dca561"
+inactive = "#727169"
+graph_text = "#dcd7ba"
+misc = "#7aa89f"
+
+[stats]
+clock = "#7aa89f"
+power = "#dcd7ba"
+fan = "#dcd7ba"
+bandwidth = "#dcd7ba"
+
+[borders]
+cpu = "#727169"
+gpu = "#727169"
+memory = "#727169"
+npu = "#727169"
+processes = "#727169"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#98BB6C" },
+  { at = 0.5, color = "#DCA561" },
+  { at = 1.0, color = "#E82424" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#98BB6C" },
+  { at = 0.5, color = "#DCA561" },
+  { at = 1.0, color = "#E82424" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#98BB6C" },
+  { at = 0.5, color = "#DCA561" },
+  { at = 1.0, color = "#E82424" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#658594" },
+  { at = 0.5, color = "#7E9CDB" },
+  { at = 1.0, color = "#7FB4CA" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#98BB6C" },
+  { at = 0.5, color = "#DCA561" },
+  { at = 1.0, color = "#C34043" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#98BB6C" },
+  { at = 0.5, color = "#DCA561" },
+  { at = 1.0, color = "#C34043" },
+]

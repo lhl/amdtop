@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/adapta.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop Adapta theme
+#by olokelo
+
+schema = 1
+name = "adapta"
+
+[ui]
+background = "default"
+foreground = "#cfd8dc"
+title = "#ff"
+highlight = "#90"
+selected_background = "#bb0040"
+selected_foreground = "#ff"
+inactive = "#40"
+graph_text = "#cfd8dc"
+misc = "#55bcea"
+
+[stats]
+clock = "#55bcea"
+power = "#cfd8dc"
+fan = "#cfd8dc"
+bandwidth = "#cfd8dc"
+
+[borders]
+cpu = "#00bcd4"
+gpu = "#00bcd4"
+memory = "#00bcd4"
+npu = "#00bcd4"
+processes = "#00bcd4"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#00bcd4" },
+  { at = 0.5, color = "#d4d400" },
+  { at = 1.0, color = "#ff0040" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#00bcd4" },
+  { at = 0.5, color = "#d4d400" },
+  { at = 1.0, color = "#ff0040" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#00bcd4" },
+  { at = 0.5, color = "#d4d400" },
+  { at = 1.0, color = "#ff0040" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#ff0040" },
+  { at = 0.5, color = "#ff2060" },
+  { at = 1.0, color = "#ff4080" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#00bcd4" },
+  { at = 0.5, color = "#d4d400" },
+  { at = 1.0, color = "#ff0040" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#00bcd4" },
+  { at = 0.5, color = "#d4d400" },
+  { at = 1.0, color = "#ff0040" },
+]

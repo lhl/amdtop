@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/tomorrow-night.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Nord theme but using the Tomorrow Night palette
+#by Appuchia <contact@appu.ltd>
+
+schema = 1
+name = "tomorrow-night"
+
+[ui]
+background = "#1d1f21"
+foreground = "#c5c8c6"
+title = "#c5c8c6"
+highlight = "#81beb7"
+selected_background = "#282a2e"
+selected_foreground = "#c5c8c6"
+inactive = "#373b41"
+graph_text = "#c5c8c6"
+misc = "#969896"
+
+[stats]
+clock = "#969896"
+power = "#c5c8c6"
+fan = "#c5c8c6"
+bandwidth = "#c5c8c6"
+
+[borders]
+cpu = "#81a2be"
+gpu = "#81a2be"
+memory = "#81a2be"
+npu = "#81a2be"
+processes = "#81a2be"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#b5bd68" },
+  { at = 0.5, color = "#f0c674" },
+  { at = 1.0, color = "#cc6666" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#b5bd68" },
+  { at = 0.5, color = "#f0c674" },
+  { at = 1.0, color = "#cc6666" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#b5bd68" },
+  { at = 0.5, color = "#f0c674" },
+  { at = 1.0, color = "#cc6666" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#b5bd68" },
+  { at = 0.5, color = "#f0c674" },
+  { at = 1.0, color = "#cc6666" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#b5bd68" },
+  { at = 0.5, color = "#f0c674" },
+  { at = 1.0, color = "#cc6666" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#b5bd68" },
+  { at = 0.5, color = "#f0c674" },
+  { at = 1.0, color = "#cc6666" },
+]

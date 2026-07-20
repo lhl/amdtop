@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/flat-remix.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop theme with flat-remix colors
+#by Daniel Ruiz de Alegría <daniel@drasite.com>
+
+schema = 1
+name = "flat-remix"
+
+[ui]
+background = "default"
+foreground = "#E6E6E6"
+title = "#ff"
+highlight = "#90"
+selected_background = "#b8174c"
+selected_foreground = "#ff"
+inactive = "#40"
+graph_text = "#E6E6E6"
+misc = "#367bf0"
+
+[stats]
+clock = "#367bf0"
+power = "#E6E6E6"
+fan = "#E6E6E6"
+bandwidth = "#E6E6E6"
+
+[borders]
+cpu = "#367bf0"
+gpu = "#19a187"
+memory = "#19a187"
+npu = "#fd3535"
+processes = "#4aaee6"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#367bf0" },
+  { at = 0.5, color = "#b8174c" },
+  { at = 1.0, color = "#d41919" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#367bf0" },
+  { at = 0.5, color = "#4aaee6" },
+  { at = 1.0, color = "#54bd8e" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#367bf0" },
+  { at = 0.5, color = "#4aaee6" },
+  { at = 1.0, color = "#54bd8e" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#12715f" },
+  { at = 0.5, color = "#19a187" },
+  { at = 1.0, color = "#23bac2" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#367bf0" },
+  { at = 0.5, color = "#4aaee6" },
+  { at = 1.0, color = "#54bd8e" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#367bf0" },
+  { at = 0.5, color = "#4aaee6" },
+  { at = 1.0, color = "#54bd8e" },
+]

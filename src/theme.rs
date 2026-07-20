@@ -1,45 +1,71 @@
-//! btop theme loader. Parses standard `.theme` files (hex `#RRGGBB`,
-//! 2-char grayscale `#BW`, or `R G B` decimal) and exposes resolved colors
-//! + gradient samplers. Defaults to `everforest-dark-hard`.
+//! Native amdtop theme loading, semantic color roles, and gradient sampling.
 //!
-//! Search paths (first hit wins):
-//!   `$XDG_CONFIG_HOME/btop/themes/` (`~/.config/btop/themes`)
-//!   /usr/local/share/btop/themes/
-//!   /usr/share/btop/themes/
+//! Themes use amdtop's versioned TOML format and are loaded from native
+//! amdtop directories. A bundled registry guarantees that the default theme
+//! and the shipped theme collection are available without btop or loose data
+//! files installed on the system.
 
-use std::collections::HashMap;
+mod builtin;
+
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ratatui::style::Color;
+use serde::Deserialize;
 
-pub const DEFAULT_THEME: &str = "onedark";
+pub const DEFAULT_THEME: &str = "tokyo-night";
+const THEME_SCHEMA: u32 = 1;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
+struct GradientStop {
+    at: f64,
+    color: Color,
+}
+
+#[derive(Clone, Debug)]
 pub struct Gradient {
-    pub start: Color,
-    pub mid: Option<Color>,
-    pub end: Option<Color>,
+    stops: Vec<GradientStop>,
 }
 
 impl Gradient {
-    /// Sample the gradient at `t` in [0,1].
-    /// - start only -> flat
-    /// - start+end -> linear lerp
-    /// - start+mid+end -> start->mid (t<0.5), mid->end (t>=0.5)
-    pub fn sample(self, t: f64) -> Color {
+    pub fn three(start: Color, mid: Color, end: Color) -> Self {
+        Self {
+            stops: vec![
+                GradientStop {
+                    at: 0.0,
+                    color: start,
+                },
+                GradientStop {
+                    at: 0.5,
+                    color: mid,
+                },
+                GradientStop {
+                    at: 1.0,
+                    color: end,
+                },
+            ],
+        }
+    }
+
+    /// Sample the gradient at `t` in [0,1], interpolating between the two
+    /// surrounding positioned stops.
+    pub fn sample(&self, t: f64) -> Color {
         let t = t.clamp(0.0, 1.0);
-        match (self.mid, self.end) {
-            (None, None) | (Some(_), None) => self.start,
-            (None, Some(e)) => lerp(self.start, e, t),
-            (Some(m), Some(e)) => {
-                if t < 0.5 {
-                    lerp(self.start, m, t * 2.0)
-                } else {
-                    lerp(m, e, (t - 0.5) * 2.0)
-                }
+        let first = self.stops[0];
+        if t <= first.at || self.stops.len() == 1 {
+            return first.color;
+        }
+
+        for pair in self.stops.windows(2) {
+            let [left, right] = [pair[0], pair[1]];
+            if t <= right.at {
+                let local = (t - left.at) / (right.at - left.at);
+                return lerp(left.color, right.color, local);
             }
         }
+
+        self.stops.last().map_or(first.color, |stop| stop.color)
     }
 }
 
@@ -108,29 +134,30 @@ const ANSI_COLORS: [(u8, u8, u8); 16] = [
     (255, 255, 255),
 ];
 
-/// Parse a btop color value. Formats: `#RRGGBB`, `#BW` (2-hex grayscale),
-/// `R G B` (decimal). Empty string -> None (terminal default / transparent).
-fn parse_color(s: &str) -> Option<Color> {
-    let s = s.trim();
-    if s.is_empty() {
+/// Parse a native color literal. Formats are `#RRGGBB`, `#BW` (two-digit
+/// grayscale), and `R G B` decimal. Empty and `default` represent the terminal
+/// default and therefore return `None`.
+fn parse_color(value: &str) -> Option<Color> {
+    let value = value.trim();
+    if value.is_empty() || value.eq_ignore_ascii_case("default") {
         return None;
     }
-    if let Some(h) = s.strip_prefix('#') {
-        if h.len() == 6 {
-            let r = u8::from_str_radix(&h[0..2], 16).ok()?;
-            let g = u8::from_str_radix(&h[2..4], 16).ok()?;
-            let b = u8::from_str_radix(&h[4..6], 16).ok()?;
-            return Some(Color::Rgb(r, g, b));
-        }
-        if h.len() == 2 {
-            // 2-hex grayscale: "#ff" -> 255
-            let v = u8::from_str_radix(h, 16).ok()?;
-            return Some(Color::Rgb(v, v, v));
-        }
-        return None;
+    if let Some(hex) = value.strip_prefix('#') {
+        return match hex.len() {
+            6 => Some(Color::Rgb(
+                u8::from_str_radix(&hex[0..2], 16).ok()?,
+                u8::from_str_radix(&hex[2..4], 16).ok()?,
+                u8::from_str_radix(&hex[4..6], 16).ok()?,
+            )),
+            2 => {
+                let gray = u8::from_str_radix(hex, 16).ok()?;
+                Some(Color::Rgb(gray, gray, gray))
+            }
+            _ => None,
+        };
     }
-    // decimal "R G B"
-    let mut fields = s.split_whitespace();
+
+    let mut fields = value.split_whitespace();
     let red = fields.next()?.parse().ok()?;
     let green = fields.next()?.parse().ok()?;
     let blue = fields.next()?.parse().ok()?;
@@ -140,19 +167,161 @@ fn parse_color(s: &str) -> Option<Color> {
         .then_some(Color::Rgb(red, green, blue))
 }
 
-fn color(values: &HashMap<String, String>, key: &str) -> Option<Color> {
-    values.get(key).and_then(|value| parse_color(value))
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NativeTheme {
+    schema: u32,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    palette: HashMap<String, String>,
+    #[serde(default)]
+    ui: NativeUi,
+    #[serde(default)]
+    stats: NativeStats,
+    #[serde(default)]
+    borders: NativeBorders,
+    #[serde(default)]
+    gradients: NativeGradients,
 }
 
-fn color_or(values: &HashMap<String, String>, key: &str, default: Color) -> Color {
-    color(values, key).unwrap_or(default)
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct NativeUi {
+    background: Option<String>,
+    foreground: Option<String>,
+    title: Option<String>,
+    highlight: Option<String>,
+    selected_background: Option<String>,
+    selected_foreground: Option<String>,
+    inactive: Option<String>,
+    graph_text: Option<String>,
+    misc: Option<String>,
 }
 
-fn gradient(values: &HashMap<String, String>, name: &str) -> Gradient {
-    Gradient {
-        start: color(values, &format!("{name}_start")).unwrap_or(Color::Rgb(0xa7, 0xc0, 0x80)),
-        mid: color(values, &format!("{name}_mid")),
-        end: color(values, &format!("{name}_end")),
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct NativeStats {
+    clock: Option<String>,
+    power: Option<String>,
+    fan: Option<String>,
+    bandwidth: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct NativeBorders {
+    cpu: Option<String>,
+    gpu: Option<String>,
+    memory: Option<String>,
+    npu: Option<String>,
+    processes: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct NativeGradients {
+    temperature: Option<NativeGradient>,
+    cpu: Option<NativeGradient>,
+    gpu: Option<NativeGradient>,
+    memory: Option<NativeGradient>,
+    npu: Option<NativeGradient>,
+    process: Option<NativeGradient>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NativeGradient {
+    stops: Vec<NativeGradientStop>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NativeGradientStop {
+    at: f64,
+    color: String,
+}
+
+struct ColorResolver {
+    palette: HashMap<String, Color>,
+}
+
+impl ColorResolver {
+    fn new(raw: HashMap<String, String>) -> Result<Self, String> {
+        let mut palette = HashMap::with_capacity(raw.len());
+        for (name, value) in raw {
+            let color = parse_color(&value)
+                .ok_or_else(|| format!("palette.{name} has invalid color {value:?}"))?;
+            palette.insert(name, color);
+        }
+        Ok(Self { palette })
+    }
+
+    fn resolve(&self, value: &str, field: &str) -> Result<Color, String> {
+        let value = value.trim();
+        if let Some(name) = value.strip_prefix('$') {
+            return self
+                .palette
+                .get(name)
+                .copied()
+                .ok_or_else(|| format!("{field} references unknown palette color {name:?}"));
+        }
+        if value.eq_ignore_ascii_case("default") || value.is_empty() {
+            return Ok(Color::Reset);
+        }
+        parse_color(value).ok_or_else(|| format!("{field} has invalid color {value:?}"))
+    }
+
+    fn role(&self, value: Option<&String>, fallback: Color, field: &str) -> Result<Color, String> {
+        value.map_or(Ok(fallback), |value| self.resolve(value, field))
+    }
+
+    fn background(
+        &self,
+        value: Option<&String>,
+        fallback: Option<Color>,
+    ) -> Result<Option<Color>, String> {
+        let Some(value) = value else {
+            return Ok(fallback);
+        };
+        if value.trim().is_empty() || value.eq_ignore_ascii_case("default") {
+            return Ok(None);
+        }
+        self.resolve(value, "ui.background").map(Some)
+    }
+
+    fn gradient(
+        &self,
+        value: Option<&NativeGradient>,
+        fallback: &Gradient,
+        field: &str,
+    ) -> Result<Gradient, String> {
+        let Some(value) = value else {
+            return Ok(fallback.clone());
+        };
+        if value.stops.is_empty() {
+            return Err(format!("{field}.stops must contain at least one stop"));
+        }
+
+        let mut stops = Vec::with_capacity(value.stops.len());
+        let mut previous = None;
+        for (index, stop) in value.stops.iter().enumerate() {
+            if !(0.0..=1.0).contains(&stop.at) {
+                return Err(format!("{field}.stops[{index}].at must be between 0 and 1"));
+            }
+            if previous.is_some_and(|previous| stop.at <= previous) {
+                return Err(format!(
+                    "{field}.stops positions must be strictly increasing"
+                ));
+            }
+            stops.push(GradientStop {
+                at: stop.at,
+                color: self.resolve(&stop.color, &format!("{field}.stops[{index}].color"))?,
+            });
+            previous = Some(stop.at);
+        }
+
+        Ok(Gradient { stops })
     }
 }
 
@@ -166,91 +335,200 @@ pub struct Theme {
     inactive_fg: Color,
     graph_text: Color,
     proc_misc: Color,
+    clock: Color,
+    power: Color,
+    fan: Color,
+    bandwidth: Color,
     cpu_box: Color,
-    mem_box: Color,
+    gpu_box: Color,
     npu_box: Color,
     proc_box: Color,
     temp: Gradient,
     cpu: Gradient,
-    used: Gradient,
+    gpu: Gradient,
+    memory: Gradient,
+    npu: Gradient,
     process: Gradient,
 }
 
 impl Theme {
-    /// Load a named btop theme from the standard search paths.
-    /// Falls back to the built-in everforest-dark-hard palette if not found.
     pub fn load(name: &str) -> Self {
-        for directory in search_dirs() {
-            let path = directory.join(format!("{name}.theme"));
-            if let Ok(text) = fs::read_to_string(path) {
-                return Self::parse(&text);
-            }
-        }
-        Self::parse(EVERFOREST_FALLBACK)
+        Self::load_from(name, &theme_dirs())
     }
 
-    /// List all available theme names found in the search paths (sorted, unique).
+    fn load_from(name: &str, directories: &[PathBuf]) -> Self {
+        for directory in directories {
+            let path = directory.join(format!("{name}.toml"));
+            if let Ok(text) = fs::read_to_string(path)
+                && let Ok(theme) = Self::parse_native(&text)
+            {
+                return theme;
+            }
+        }
+
+        builtin::get(name)
+            .and_then(|text| Self::parse_native(text).ok())
+            .or_else(|| builtin::get(DEFAULT_THEME).and_then(|text| Self::parse_native(text).ok()))
+            .unwrap_or_else(Self::default_tokyo_night)
+    }
+
     pub fn list_available() -> Vec<String> {
-        let mut set = std::collections::BTreeSet::new();
-        for dir in search_dirs() {
-            if let Ok(rd) = fs::read_dir(&dir) {
-                for e in rd.flatten() {
-                    let p = e.path();
-                    if p.extension().and_then(|x| x.to_str()) == Some("theme")
-                        && let Some(stem) = p.file_stem().and_then(|x| x.to_str())
+        Self::list_available_from(&theme_dirs())
+    }
+
+    fn list_available_from(directories: &[PathBuf]) -> Vec<String> {
+        let mut names: BTreeSet<String> = builtin::names().map(str::to_string).collect();
+        for directory in directories {
+            if let Ok(entries) = fs::read_dir(directory) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|extension| extension.to_str()) == Some("toml")
+                        && let Some(name) = path.file_stem().and_then(|name| name.to_str())
                     {
-                        set.insert(stem.to_string());
+                        names.insert(name.to_string());
                     }
                 }
             }
         }
-        set.insert(DEFAULT_THEME.to_string());
-        set.into_iter().collect()
+        names.into_iter().collect()
     }
 
-    fn parse(text: &str) -> Self {
-        let mut raw = HashMap::new();
-        for line in text.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            // theme[key]="value"
-            if let Some(rest) = line.strip_prefix("theme[")
-                && let Some(close) = rest.find(']')
-            {
-                let key = rest[..close].to_string();
-                let val_part = rest[close + 1..].trim_start();
-                let val = val_part.strip_prefix('=').unwrap_or(val_part).trim();
-                // strip quotes
-                let val = val.trim_matches('"');
-                raw.insert(key, val.to_string());
-            }
+    #[cfg(test)]
+    fn builtin_names() -> Vec<&'static str> {
+        builtin::names().collect()
+    }
+
+    fn parse_native(text: &str) -> Result<Self, String> {
+        let native: NativeTheme = toml::from_str(text).map_err(|error| error.to_string())?;
+        if native.schema != THEME_SCHEMA {
+            return Err(format!(
+                "unsupported theme schema {}; expected {THEME_SCHEMA}",
+                native.schema
+            ));
         }
-        let main_fg = color_or(&raw, "main_fg", Color::Rgb(0xd3, 0xc6, 0xaa));
-        let div_line = color_or(&raw, "div_line", Color::Rgb(0x37, 0x41, 0x45));
+        let _display_name = native.name;
+        let resolver = ColorResolver::new(native.palette)?;
+        let defaults = Self::default_tokyo_night();
+
+        Ok(Self {
+            main_bg: resolver.background(native.ui.background.as_ref(), defaults.main_bg)?,
+            main_fg: resolver.role(
+                native.ui.foreground.as_ref(),
+                defaults.main_fg,
+                "ui.foreground",
+            )?,
+            title: resolver.role(native.ui.title.as_ref(), defaults.title, "ui.title")?,
+            hi_fg: resolver.role(native.ui.highlight.as_ref(), defaults.hi_fg, "ui.highlight")?,
+            selected_bg: resolver.role(
+                native.ui.selected_background.as_ref(),
+                defaults.selected_bg,
+                "ui.selected_background",
+            )?,
+            selected_fg: resolver.role(
+                native.ui.selected_foreground.as_ref(),
+                defaults.selected_fg,
+                "ui.selected_foreground",
+            )?,
+            inactive_fg: resolver.role(
+                native.ui.inactive.as_ref(),
+                defaults.inactive_fg,
+                "ui.inactive",
+            )?,
+            graph_text: resolver.role(
+                native.ui.graph_text.as_ref(),
+                defaults.graph_text,
+                "ui.graph_text",
+            )?,
+            proc_misc: resolver.role(native.ui.misc.as_ref(), defaults.proc_misc, "ui.misc")?,
+            clock: resolver.role(native.stats.clock.as_ref(), defaults.clock, "stats.clock")?,
+            power: resolver.role(native.stats.power.as_ref(), defaults.power, "stats.power")?,
+            fan: resolver.role(native.stats.fan.as_ref(), defaults.fan, "stats.fan")?,
+            bandwidth: resolver.role(
+                native.stats.bandwidth.as_ref(),
+                defaults.bandwidth,
+                "stats.bandwidth",
+            )?,
+            cpu_box: resolver.role(native.borders.cpu.as_ref(), defaults.cpu_box, "borders.cpu")?,
+            gpu_box: resolver.role(
+                native
+                    .borders
+                    .gpu
+                    .as_ref()
+                    .or(native.borders.memory.as_ref()),
+                defaults.gpu_box,
+                "borders.gpu",
+            )?,
+            npu_box: resolver.role(native.borders.npu.as_ref(), defaults.npu_box, "borders.npu")?,
+            proc_box: resolver.role(
+                native.borders.processes.as_ref(),
+                defaults.proc_box,
+                "borders.processes",
+            )?,
+            temp: resolver.gradient(
+                native.gradients.temperature.as_ref(),
+                &defaults.temp,
+                "gradients.temperature",
+            )?,
+            cpu: resolver.gradient(
+                native.gradients.cpu.as_ref(),
+                &defaults.cpu,
+                "gradients.cpu",
+            )?,
+            gpu: resolver.gradient(
+                native.gradients.gpu.as_ref(),
+                &defaults.gpu,
+                "gradients.gpu",
+            )?,
+            memory: resolver.gradient(
+                native.gradients.memory.as_ref(),
+                &defaults.memory,
+                "gradients.memory",
+            )?,
+            npu: resolver.gradient(
+                native.gradients.npu.as_ref(),
+                &defaults.npu,
+                "gradients.npu",
+            )?,
+            process: resolver.gradient(
+                native.gradients.process.as_ref(),
+                &defaults.process,
+                "gradients.process",
+            )?,
+        })
+    }
+
+    fn default_tokyo_night() -> Self {
+        let green = Color::Rgb(0x9e, 0xce, 0x6a);
+        let yellow = Color::Rgb(0xe0, 0xaf, 0x68);
+        let red = Color::Rgb(0xf7, 0x76, 0x8e);
+        let utilization = Gradient::three(green, yellow, red);
         Self {
-            main_bg: color(&raw, "main_bg"),
-            main_fg,
-            title: color_or(&raw, "title", main_fg),
-            hi_fg: color_or(&raw, "hi_fg", Color::Rgb(0xe6, 0x7e, 0x80)),
-            selected_bg: color_or(&raw, "selected_bg", Color::Rgb(0x37, 0x41, 0x45)),
-            selected_fg: color_or(&raw, "selected_fg", Color::Rgb(0xdb, 0xbc, 0x7f)),
-            inactive_fg: color_or(&raw, "inactive_fg", Color::Rgb(0x50, 0x49, 0x45)),
-            graph_text: color_or(&raw, "graph_text", main_fg),
-            proc_misc: color_or(&raw, "proc_misc", Color::Rgb(0xa7, 0xc0, 0x80)),
-            cpu_box: color_or(&raw, "cpu_box", div_line),
-            mem_box: color_or(&raw, "mem_box", div_line),
-            npu_box: color_or(&raw, "net_box", div_line),
-            proc_box: color_or(&raw, "proc_box", div_line),
-            temp: gradient(&raw, "temp"),
-            cpu: gradient(&raw, "cpu"),
-            used: gradient(&raw, "used"),
-            process: gradient(&raw, "process"),
+            main_bg: Some(Color::Rgb(0x1a, 0x1b, 0x26)),
+            main_fg: Color::Rgb(0xcf, 0xc9, 0xc2),
+            title: Color::Rgb(0xcf, 0xc9, 0xc2),
+            hi_fg: Color::Rgb(0x7d, 0xcf, 0xff),
+            selected_bg: Color::Rgb(0x41, 0x48, 0x68),
+            selected_fg: Color::Rgb(0xcf, 0xc9, 0xc2),
+            inactive_fg: Color::Rgb(0x56, 0x5f, 0x89),
+            graph_text: Color::Rgb(0xcf, 0xc9, 0xc2),
+            proc_misc: Color::Rgb(0x7d, 0xcf, 0xff),
+            clock: Color::Rgb(0x7d, 0xcf, 0xff),
+            power: Color::Rgb(0xcf, 0xc9, 0xc2),
+            fan: Color::Rgb(0xcf, 0xc9, 0xc2),
+            bandwidth: Color::Rgb(0xcf, 0xc9, 0xc2),
+            cpu_box: Color::Rgb(0x56, 0x5f, 0x89),
+            gpu_box: Color::Rgb(0x56, 0x5f, 0x89),
+            npu_box: Color::Rgb(0x56, 0x5f, 0x89),
+            proc_box: Color::Rgb(0x56, 0x5f, 0x89),
+            temp: utilization.clone(),
+            cpu: utilization.clone(),
+            gpu: utilization.clone(),
+            memory: utilization.clone(),
+            npu: utilization.clone(),
+            process: utilization,
         }
     }
 
-    /// Main background. None means to use the terminal default.
     pub fn main_bg(&self) -> Option<Color> {
         self.main_bg
     }
@@ -278,123 +556,148 @@ impl Theme {
     pub fn proc_misc(&self) -> Color {
         self.proc_misc
     }
+    pub fn clock(&self) -> Color {
+        self.clock
+    }
+    pub fn power(&self) -> Color {
+        self.power
+    }
+    pub fn fan(&self) -> Color {
+        self.fan
+    }
+    pub fn bandwidth(&self) -> Color {
+        self.bandwidth
+    }
     pub fn box_color(&self, kind: SectionBox) -> Color {
         match kind {
             SectionBox::Cpu => self.cpu_box,
-            SectionBox::Mem => self.mem_box,
+            SectionBox::Gpu => self.gpu_box,
             SectionBox::Npu => self.npu_box,
             SectionBox::Proc => self.proc_box,
         }
     }
+    pub fn temp(&self) -> &Gradient {
+        &self.temp
+    }
+    pub fn cpu(&self) -> &Gradient {
+        &self.cpu
+    }
+    pub fn gpu(&self) -> &Gradient {
+        &self.gpu
+    }
+    pub fn used(&self) -> &Gradient {
+        &self.memory
+    }
+    pub fn npu(&self) -> &Gradient {
+        &self.npu
+    }
+    pub fn process(&self) -> &Gradient {
+        &self.process
+    }
 
-    pub fn temp(&self) -> Gradient {
-        self.temp
-    }
-    pub fn cpu(&self) -> Gradient {
-        self.cpu
-    }
-    pub fn used(&self) -> Gradient {
-        self.used
-    }
-    pub fn process(&self) -> Gradient {
-        self.process
-    }
-
-    /// Sample the appropriate theme gradient for a utilization percentage.
     pub fn util_color(&self, pct: f64, kind: UtilKind) -> Color {
-        // map nvitop thresholds onto gradient positions:
-        // light (<10%) -> start, moderate (10-75/80%) -> mid-ish, heavy -> end
-        let g = match kind {
-            UtilKind::Gpu => self.cpu(),
+        let gradient = match kind {
+            UtilKind::Cpu => self.cpu(),
+            UtilKind::Gpu => self.gpu(),
             UtilKind::Mem => self.used(),
-            UtilKind::Npu => self.process(),
+            UtilKind::Npu => self.npu(),
         };
-        let t = (pct / 100.0).clamp(0.0, 1.0);
-        g.sample(t)
+        gradient.sample((pct / 100.0).clamp(0.0, 1.0))
     }
 }
 
 #[derive(Clone, Copy)]
 pub enum SectionBox {
     Cpu,
-    Mem,
+    Gpu,
     Npu,
     Proc,
 }
 
 #[derive(Clone, Copy)]
 pub enum UtilKind {
+    Cpu,
     Gpu,
     Mem,
     Npu,
 }
 
-fn search_dirs() -> Vec<PathBuf> {
+fn theme_dirs() -> Vec<PathBuf> {
     let xdg_config = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from);
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    search_dirs_from(xdg_config.as_deref(), home.as_deref())
+    theme_dirs_from(xdg_config.as_deref(), home.as_deref())
 }
 
-fn search_dirs_from(
-    xdg_config: Option<&std::path::Path>,
-    home: Option<&std::path::Path>,
-) -> Vec<PathBuf> {
+fn theme_dirs_from(xdg_config: Option<&Path>, home: Option<&Path>) -> Vec<PathBuf> {
     let mut directories = Vec::with_capacity(4);
     if let Some(xdg_config) = xdg_config.filter(|path| path.is_absolute()) {
-        directories.push(xdg_config.join("btop/themes"));
+        directories.push(xdg_config.join("amdtop/themes"));
     }
     if let Some(home) = home {
-        directories.push(home.join(".config/btop/themes"));
+        directories.push(home.join(".config/amdtop/themes"));
     }
-    directories.push(PathBuf::from("/usr/local/share/btop/themes"));
-    directories.push(PathBuf::from("/usr/share/btop/themes"));
+    directories.push(PathBuf::from("/usr/local/share/amdtop/themes"));
+    directories.push(PathBuf::from("/usr/share/amdtop/themes"));
     directories
 }
 
-/// Bundled fallback in case no theme files are installed on the system.
-/// Minimal everforest-dark-hard palette.
-const EVERFOREST_FALLBACK: &str = r##"
-theme[main_bg]="#272e33"
-theme[main_fg]="#d3c6aa"
-theme[title]="#d3c6aa"
-theme[hi_fg]="#e67e80"
-theme[selected_bg]="#374145"
-theme[selected_fg]="#dbbc7f"
-theme[inactive_fg]="#272e33"
-theme[graph_text]="#d3c6aa"
-theme[proc_misc]="#a7c080"
-theme[cpu_box]="#374145"
-theme[mem_box]="#374145"
-theme[net_box]="#374145"
-theme[proc_box]="#374145"
-theme[div_line]="#374145"
-theme[temp_start]="#a7c080"
-theme[temp_mid]="#dbbc7f"
-theme[temp_end]="#f85552"
-theme[cpu_start]="#a7c080"
-theme[cpu_mid]="#dbbc7f"
-theme[cpu_end]="#f85552"
-theme[used_start]="#a7c080"
-theme[used_mid]="#dbbc7f"
-theme[used_end]="#f85552"
-theme[free_start]="#f85552"
-theme[free_mid]="#dbbc7f"
-theme[free_end]="#a7c080"
-theme[process_start]="#a7c080"
-theme[process_mid]="#f85552"
-theme[process_end]="#CC241D"
-"##;
-
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use ratatui::style::Color;
 
-    use super::{Gradient, Theme, parse_color, search_dirs_from, to_rgb};
+    use super::{DEFAULT_THEME, SectionBox, Theme, builtin, parse_color, theme_dirs_from, to_rgb};
+
+    const NATIVE_THEME: &str = r##"
+schema = 1
+name = "test-native"
+
+[palette]
+bg = "#010203"
+fg = "#aabbcc"
+accent = "#112233"
+
+[ui]
+background = "$bg"
+foreground = "$fg"
+title = "$fg"
+highlight = "$accent"
+
+[stats]
+clock = "$accent"
+power = "#445566"
+fan = "#778899"
+bandwidth = "#abcdef"
+
+[borders]
+cpu = "#100000"
+gpu = "#200000"
+memory = "#300000"
+npu = "#400000"
+processes = "#500000"
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#000000" },
+  { at = 0.25, color = "#646464" },
+  { at = 1.0, color = "#c8c8c8" },
+]
+"##;
+
+    static TEMP_ID: AtomicUsize = AtomicUsize::new(0);
+
+    fn temp_theme_dir() -> PathBuf {
+        let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("amdtop-theme-{}-{id}", std::process::id()));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
 
     #[test]
-    fn parse_color_supports_btop_formats() {
+    fn parse_color_supports_native_formats() {
         assert_eq!(parse_color("#12aBcF"), Some(Color::Rgb(0x12, 0xab, 0xcf)));
         assert_eq!(parse_color("#80"), Some(Color::Rgb(0x80, 0x80, 0x80)));
         assert_eq!(parse_color("1 2 3"), Some(Color::Rgb(1, 2, 3)));
@@ -404,21 +707,109 @@ mod tests {
     }
 
     #[test]
-    fn theme_parser_resolves_named_colors() {
-        let theme = Theme::parse("theme[main_fg]=\"#010203\"");
-        assert_eq!(theme.main_fg(), Color::Rgb(1, 2, 3));
+    fn native_theme_resolves_palette_and_semantic_roles() {
+        let theme = Theme::parse_native(NATIVE_THEME).unwrap();
+
+        assert_eq!(theme.main_bg(), Some(Color::Rgb(1, 2, 3)));
+        assert_eq!(theme.main_fg(), Color::Rgb(0xaa, 0xbb, 0xcc));
+        assert_eq!(theme.hi_fg(), Color::Rgb(0x11, 0x22, 0x33));
+        assert_eq!(theme.clock(), Color::Rgb(0x11, 0x22, 0x33));
+        assert_eq!(theme.power(), Color::Rgb(0x44, 0x55, 0x66));
+        assert_eq!(theme.fan(), Color::Rgb(0x77, 0x88, 0x99));
+        assert_eq!(theme.bandwidth(), Color::Rgb(0xab, 0xcd, 0xef));
+        assert_eq!(theme.box_color(SectionBox::Gpu), Color::Rgb(0x20, 0, 0));
     }
 
     #[test]
-    fn gradient_interpolates_through_midpoint() {
-        let gradient = Gradient {
-            start: Color::Rgb(0, 0, 0),
-            mid: Some(Color::Rgb(100, 100, 100)),
-            end: Some(Color::Rgb(200, 200, 200)),
-        };
+    fn native_gradient_supports_positioned_stops() {
+        let theme = Theme::parse_native(NATIVE_THEME).unwrap();
 
-        assert_eq!(gradient.sample(0.5), Color::Rgb(100, 100, 100));
-        assert_eq!(gradient.sample(1.0), Color::Rgb(200, 200, 200));
+        assert_eq!(theme.gpu().sample(0.25), Color::Rgb(100, 100, 100));
+        assert_eq!(theme.gpu().sample(0.625), Color::Rgb(150, 150, 150));
+        assert_eq!(theme.gpu().sample(1.0), Color::Rgb(200, 200, 200));
+    }
+
+    #[test]
+    fn native_theme_rejects_unknown_schema_and_palette_references() {
+        assert!(Theme::parse_native("schema = 2").is_err());
+        assert!(Theme::parse_native("schema = 1\n[ui]\nforeground = \"$missing\"\n").is_err());
+    }
+
+    #[test]
+    fn builtin_themes_include_the_default_without_external_files() {
+        let names = Theme::builtin_names();
+        assert_eq!(DEFAULT_THEME, "tokyo-night");
+        assert!(names.contains(&DEFAULT_THEME));
+
+        let theme = Theme::load_from(DEFAULT_THEME, &[]);
+        assert_eq!(theme.main_bg(), Some(Color::Rgb(0x1a, 0x1b, 0x26)));
+        assert_eq!(theme.main_fg(), Color::Rgb(0xcf, 0xc9, 0xc2));
+    }
+
+    #[test]
+    fn partial_native_themes_inherit_the_default_theme() {
+        let theme = Theme::parse_native("schema = 1").unwrap();
+        assert_eq!(theme.main_bg(), Some(Color::Rgb(0x1a, 0x1b, 0x26)));
+        assert_eq!(theme.hi_fg(), Color::Rgb(0x7d, 0xcf, 0xff));
+    }
+
+    #[test]
+    fn complete_builtin_collection_is_embedded_and_valid() {
+        let names = Theme::builtin_names();
+        assert_eq!(names.len(), 41);
+        for expected in [
+            "dracula",
+            "everforest-dark-hard",
+            "gruvbox_dark",
+            "nord",
+            "onedark",
+            "solarized_dark",
+            "tokyo-night",
+        ] {
+            assert!(
+                names.contains(&expected),
+                "missing builtin theme {expected}"
+            );
+        }
+        for (name, text) in builtin::BUILTIN_THEMES {
+            Theme::parse_native(text)
+                .unwrap_or_else(|error| panic!("builtin theme {name} is invalid: {error}"));
+        }
+    }
+
+    #[test]
+    fn native_user_theme_overrides_a_builtin_with_the_same_name() {
+        let directory = temp_theme_dir();
+        fs::write(
+            directory.join("onedark.toml"),
+            "schema = 1\n[ui]\nforeground = \"#010203\"\n",
+        )
+        .unwrap();
+
+        let theme = Theme::load_from("onedark", std::slice::from_ref(&directory));
+        assert_eq!(theme.main_fg(), Color::Rgb(1, 2, 3));
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn missing_theme_falls_back_to_embedded_default() {
+        let theme = Theme::load_from("__amdtop_missing_theme__", &[]);
+        assert_eq!(theme.main_fg(), Color::Rgb(0xcf, 0xc9, 0xc2));
+    }
+
+    #[test]
+    fn available_themes_merge_native_files_and_builtins() {
+        let directory = temp_theme_dir();
+        fs::write(directory.join("custom.toml"), "schema = 1\n").unwrap();
+        fs::write(directory.join("ignored.theme"), "not native").unwrap();
+
+        let themes = Theme::list_available_from(std::slice::from_ref(&directory));
+        assert!(themes.iter().any(|name| name == "custom"));
+        assert!(themes.iter().any(|name| name == "onedark"));
+        assert!(!themes.iter().any(|name| name == "ignored"));
+
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
@@ -430,12 +821,14 @@ mod tests {
     }
 
     #[test]
-    fn theme_search_paths_follow_xdg_conventions() {
-        let paths = search_dirs_from(Some(Path::new("/tmp/xdg")), Some(Path::new("/home/test")));
-        assert_eq!(paths[0], Path::new("/tmp/xdg/btop/themes"));
-        assert_eq!(paths[1], Path::new("/home/test/.config/btop/themes"));
+    fn native_theme_search_paths_follow_xdg_conventions() {
+        let paths = theme_dirs_from(Some(Path::new("/tmp/xdg")), Some(Path::new("/home/test")));
+        assert_eq!(paths[0], Path::new("/tmp/xdg/amdtop/themes"));
+        assert_eq!(paths[1], Path::new("/home/test/.config/amdtop/themes"));
+        assert_eq!(paths[2], Path::new("/usr/local/share/amdtop/themes"));
+        assert_eq!(paths[3], Path::new("/usr/share/amdtop/themes"));
 
-        let relative = search_dirs_from(Some(Path::new("relative")), Some(Path::new("/home/test")));
-        assert_eq!(relative[0], Path::new("/home/test/.config/btop/themes"));
+        let relative = theme_dirs_from(Some(Path::new("relative")), Some(Path::new("/home/test")));
+        assert_eq!(relative[0], Path::new("/home/test/.config/amdtop/themes"));
     }
 }

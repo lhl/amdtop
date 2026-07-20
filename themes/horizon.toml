@@ -1,0 +1,72 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/horizon.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+
+schema = 1
+name = "horizon"
+
+[ui]
+background = "#1C1E26"
+foreground = "#f8f8f2"
+title = "#f8f8f2"
+highlight = "#B877DB"
+selected_background = "#282b37"
+selected_foreground = "#f8f8f2"
+inactive = "#272e33"
+graph_text = "#f8f8f2"
+misc = "#27D796"
+
+[stats]
+clock = "#27D796"
+power = "#f8f8f2"
+fan = "#f8f8f2"
+bandwidth = "#f8f8f2"
+
+[borders]
+cpu = "#B877DB"
+gpu = "#27D796"
+memory = "#27D796"
+npu = "#E95678"
+processes = "#25B2BC"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#27D796" },
+  { at = 0.5, color = "#FAC29A" },
+  { at = 1.0, color = "#E95678" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#27D796" },
+  { at = 0.5, color = "#FAC29A" },
+  { at = 1.0, color = "#E95678" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#27D796" },
+  { at = 0.5, color = "#FAC29A" },
+  { at = 1.0, color = "#E95678" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#27D796" },
+  { at = 0.5, color = "#FAC29A" },
+  { at = 1.0, color = "#E95678" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#27D796" },
+  { at = 0.5, color = "#FAC29A" },
+  { at = 1.0, color = "#E95678" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#27D796" },
+  { at = 0.5, color = "#FAC29A" },
+  { at = 1.0, color = "#E95678" },
+]

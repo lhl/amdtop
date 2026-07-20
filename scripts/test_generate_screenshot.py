@@ -1,6 +1,7 @@
 import unittest
 
 from scripts.generate_screenshot import (
+    build_parser,
     canvas_size,
     choose_auto_cores,
     color_to_rgb,
@@ -10,6 +11,12 @@ from scripts.generate_screenshot import (
 
 
 class ScreenshotHelperTests(unittest.TestCase):
+    def test_canonical_capture_uses_the_application_default_theme(self):
+        args = build_parser().parse_args([])
+        self.assertEqual(args.theme, "tokyo-night")
+        self.assertEqual(args.default_fg, "cfc9c2")
+        self.assertEqual(args.default_bg, "1a1b26")
+
     def test_xterm_color_conversion_covers_palette_sections(self):
         self.assertEqual(xterm_rgb(9), (255, 0, 0))
         self.assertEqual(xterm_rgb(16), (0, 0, 0))

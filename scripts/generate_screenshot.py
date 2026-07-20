@@ -574,14 +574,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--margin", type=nonnegative_int, default=4, help="canvas margin in pixels"
     )
     parser.add_argument(
-        "--default-fg", default="abb2bf", help="six-digit default foreground RGB"
+        "--default-fg", default="cfc9c2", help="six-digit default foreground RGB"
     )
     parser.add_argument(
-        "--default-bg", default="282c34", help="six-digit default background RGB"
+        "--default-bg", default="1a1b26", help="six-digit default background RGB"
     )
     parser.add_argument(
         "--theme",
-        default="onedark",
+        default="tokyo-night",
         help="amdtop theme stored in the isolated capture state",
     )
     parser.add_argument(

@@ -1,0 +1,68 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/orange.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Btop orange theme
+# by neocerambyx
+
+schema = 1
+name = "orange"
+
+[ui]
+background = "#00"
+foreground = "#ffa500"
+title = "#ffa500"
+highlight = "#ffcc66"
+selected_background = "#ffa500"
+selected_foreground = "#000000"
+inactive = "#4d3200"
+graph_text = "#ffa500"
+misc = "#ffa500"
+
+[stats]
+clock = "#ffa500"
+power = "#ffa500"
+fan = "#ffa500"
+bandwidth = "#ffa500"
+
+[borders]
+cpu = "#ffa500"
+gpu = "#ffa500"
+memory = "#ffa500"
+npu = "#ffa500"
+processes = "#ffa500"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#996300" },
+  { at = 1.0, color = "#ffa500" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#996300" },
+  { at = 1.0, color = "#ffa500" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#996300" },
+  { at = 1.0, color = "#ffa500" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#996300" },
+  { at = 1.0, color = "#ffa500" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#996300" },
+  { at = 1.0, color = "#ffa500" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#996300" },
+  { at = 1.0, color = "#ffa500" },
+]

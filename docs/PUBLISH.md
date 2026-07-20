@@ -1,8 +1,12 @@
 # Publishing Checklist
 
 Use this checklist to prepare and publish an `amdtop` release. The initial
-`amdtop` 0.2.2 release was published manually; subsequent releases should use
-the trusted-publishing workflow in `.github/workflows/publish.yml`.
+`amdtop` 0.2.2 release was published manually; subsequent crates.io releases
+should use the trusted-publishing workflow in `.github/workflows/publish.yml`.
+The [`amdtop` AUR package](https://aur.archlinux.org/packages/amdtop) is
+updated separately after the crates.io artifact has been published and
+verified. A release is not complete until both registries report the new
+version.
 
 ## One-Time Trusted Publishing Setup
 
@@ -40,6 +44,69 @@ ends.
 
 The trusted publisher grants `publish-update` access to this crate. It does not
 grant owner-management or yank permissions.
+
+## One-Time AUR Setup
+
+The AUR packaging lives in the standalone sibling repository
+[`lhl/amdtop-aur`](https://github.com/lhl/amdtop-aur). Its `master` branch is
+mirrored to the AUR repository; the checkout uses remotes named `github` and
+`aur`. Keeping it separate satisfies the AUR Git layout and leaves open the
+option of adding it to this repository as a submodule later.
+
+Do not store the AUR private key in GitHub Actions or publish AUR updates from
+CI. AUR authentication uses a long-lived SSH key, and a source package still
+needs a human review for dependency, license, and build-system changes.
+
+1. On an Arch system, install the packaging tools:
+
+   ```sh
+   sudo pacman -S --needed base-devel devtools namcap pacman-contrib
+   ```
+
+2. Add the dedicated public key from `~/.ssh/AUR.pub` to the **SSH Public Key**
+   field in the [AUR account settings](https://aur.archlinux.org/account/), and
+   configure the matching private key:
+
+   ```sshconfig
+   Host aur.archlinux.org
+     User aur
+     IdentityFile ~/.ssh/AUR
+     IdentitiesOnly yes
+   ```
+
+   Test it with `ssh aur@aur.archlinux.org help`. The AUR provides Git and
+   management commands, not an interactive shell.
+
+3. Restore or create the sibling checkout with the expected remote names:
+
+   ```sh
+   git clone git@github.com:lhl/amdtop-aur.git ../amdtop-aur
+   cd ../amdtop-aur
+   git switch master
+   git remote add aur ssh://aur@aur.archlinux.org/amdtop.git
+   git config user.name lhl
+   git config user.email lhl@randomfoo.net
+   git remote -v
+   ```
+
+   The GitHub mirror and AUR repository must point to the same commit before an
+   update. The AUR only accepts pushes to `master`; its first push creates the
+   package page.
+
+4. Keep only reviewed AUR source files in this repository: `PKGBUILD`,
+   `.SRCINFO`, `.gitignore`, `LICENSE`, `LICENSES/0BSD.txt`, and `REUSE.toml`.
+   The recipe builds `amdtop` from the immutable crates.io archive rather than
+   publishing a `-bin` or `-git` variant. The packaging files are licensed
+   under `0BSD`; `license=('Apache-2.0')` and the installed upstream license
+   describe amdtop itself.
+
+5. Use `scripts/update-aur.sh` from the main amdtop checkout for release
+   updates. It defaults to `../amdtop-aur`; set `AUR_DIR` only when the sibling
+   checkout is elsewhere. The script refuses to run when `CI` is set. It
+   requires either an exact interactive confirmation or the explicit
+   `--publish` option used by an authorized local deploying agent. It also
+   verifies the Apache-2.0 `.SRCINFO` metadata and requires the binary package
+   to install `LICENSE`, `NOTICE`, and `THIRD_PARTY.md`.
 
 ## Versioning
 
@@ -85,6 +152,8 @@ deleted.
 - [ ] Review any `libamdgpu_top` version change explicitly; backend updates can
       affect telemetry and GPU power-management behavior without an amdtop API
       change.
+- [ ] If native library, compiler, or test requirements changed, note the
+      corresponding AUR `depends`, `makedepends`, or `checkdepends` update.
 - [ ] Search the proposed package and release diff for credentials, machine
       paths, logs, or other private data.
 
@@ -212,6 +281,75 @@ rm -rf "$tmp_root"
 - [ ] Confirm the crates.io page, GitHub tag, GitHub Release, `Cargo.toml`, and
       changelog all identify the same version.
 - [ ] Confirm the development tree is clean: `git status -sb`.
+
+### Publish the AUR Update
+
+Update the AUR immediately after the crates.io archive is downloadable and the
+registry-installed binary has passed verification. A maintainer can run the
+local tool interactively:
+
+```sh
+scripts/update-aur.sh X.Y.Z
+```
+
+A local deploying agent that has been explicitly authorized to finish the
+release can provide the publication confirmation as an option:
+
+```sh
+scripts/update-aur.sh --publish X.Y.Z
+```
+
+`--publish` is deliberately unavailable in CI; it is an explicit instruction
+to the local deployment agent, not unattended release automation.
+
+The script:
+
+1. requires the Cargo and requested versions to agree;
+2. synchronizes the GitHub packaging mirror and verifies any existing AUR head;
+3. downloads the published crates.io archive and computes its BLAKE2b checksum;
+4. updates `PKGBUILD` and regenerates `.SRCINFO`;
+5. checks REUSE licensing, builds and tests in a clean Arch chroot, runs
+   `namcap`, and verifies the packaged executable's version;
+6. shows the complete packaging diff;
+7. commits and pushes first to the AUR and then to the GitHub mirror only after
+   either `publish amdtop X.Y.Z-1` is typed exactly or `--publish` was supplied;
+   and
+8. waits for the AUR RPC to report the expected `X.Y.Z-N` version.
+
+- [ ] Review upstream dependency, license, asset, and build-system changes; do
+      not treat a passing script as approval for an automatic version bump.
+      Confirm the sibling `PKGBUILD` uses the current upstream license and
+      installs all applicable `LICENSE`, `NOTICE`, and attribution files.
+- [ ] Resolve every `namcap` error and review each warning rather than applying
+      its suggestions blindly.
+- [ ] Confirm the package contains `/usr/bin/amdtop`, `LICENSE`, `NOTICE`,
+      `THIRD_PARTY.md`, and expected pacman metadata, and that the binary
+      reports `amdtop X.Y.Z`.
+- [ ] Optionally install the built package and run the hardware smoke test
+      before entering the publication confirmation.
+- [ ] Confirm the displayed `PKGBUILD` and `.SRCINFO` version, dependencies,
+      source URL, release number, and checksum.
+
+Intentional edits already present in the sibling `PKGBUILD` are preserved by
+the script. For a packaging-only change, leave `pkgver` unchanged, increment
+`pkgrel`, regenerate `.SRCINFO`, and run the script; its confirmation will use
+the resulting `X.Y.Z-N` release. Changes outside `PKGBUILD` and `.SRCINFO` are
+rejected.
+
+Confirm that the AUR indexed the update:
+
+```sh
+curl -fsS 'https://aur.archlinux.org/rpc/v5/info?arg[]=amdtop' |
+  jq -e '.results[0] | {Name, Version, URLPath, OutOfDate}'
+```
+
+- [ ] Confirm the AUR reports the intended `X.Y.Z-N` and package metadata;
+      do not mark the release complete while it still reports the prior version.
+- [ ] Confirm the AUR and GitHub mirror point to the same commit.
+- [ ] Confirm both the upstream and AUR working trees are clean.
+
+A broken AUR recipe does not justify moving the upstream tag or yanking a
+usable crates.io release; fix the recipe and publish a new `pkgrel`.
 
 ## Failures and Yanking
 

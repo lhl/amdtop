@@ -1,0 +1,72 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/twilight.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+
+schema = 1
+name = "twilight"
+
+[ui]
+background = "#141414"
+foreground = "#A7A7A7"
+title = "#DAD085"
+highlight = "#CF6A4C"
+selected_background = "#3E3E3E"
+selected_foreground = "#8B98AB"
+inactive = "#828282"
+graph_text = "#C5AF75"
+misc = "#8F9D6A"
+
+[stats]
+clock = "#8F9D6A"
+power = "#C5AF75"
+fan = "#C5AF75"
+bandwidth = "#C5AF75"
+
+[borders]
+cpu = "#8F9D6A"
+gpu = "#9B703F"
+memory = "#9B703F"
+npu = "#CDA869"
+processes = "#CF6A4C"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#8F9D6A" },
+  { at = 0.5, color = "#F9EE98" },
+  { at = 1.0, color = "#CF6A4C" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#8F9D6A" },
+  { at = 0.5, color = "#F9EE98" },
+  { at = 1.0, color = "#CF6A4C" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#8F9D6A" },
+  { at = 0.5, color = "#F9EE98" },
+  { at = 1.0, color = "#CF6A4C" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#8F9D6A" },
+  { at = 0.5, color = "#F9EE98" },
+  { at = 1.0, color = "#CF6A4C" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#8F9D6A" },
+  { at = 0.5, color = "#F9EE98" },
+  { at = 1.0, color = "#CF6A4C" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#8F9D6A" },
+  { at = 0.5, color = "#F9EE98" },
+  { at = 1.0, color = "#CF6A4C" },
+]

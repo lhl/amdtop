@@ -1,49 +1,124 @@
 # Screenshot Generation Runbook
 
-Use `scripts/generate_screenshot.py` to capture amdtop in a controlled
-pseudo-terminal and render `docs/screenshot.png`. Keep the script and this
-runbook current when the TUI gains sections, columns, themes, or layout rules.
+The canonical `docs/screenshot.png` is captured through the real Ghostty
+renderer with `scripts/generate_ghostty_screenshot.py`. This preserves the
+terminal's actual line height and its native Braille, block, shading, and
+box-drawing sprites instead of approximating them with Pillow font glyphs.
 
-The generator intentionally lives outside the Rust application. Its Python
-packages are maintainer-only dependencies and do not affect the amdtop binary.
+The older `scripts/generate_screenshot.py` pseudo-terminal/Pillow renderer is
+retained as a portable layout and text-dump fallback. It is not the canonical
+image path.
 
-## What the Generator Controls
-
-The script:
-
-- cleans and builds `target/screenshot/debug/amdtop` with the lockfile unless
-  `--no-build` is used, keeping documentation builds isolated from normal Cargo
-  profiles;
-- launches it in an isolated pseudo-terminal and temporary `XDG_CONFIG_HOME`;
-- expands every section with the `onedark` theme and `3/4` gauge blocks;
-- creates short, variable, affinity-pinned CPU load on four available cores by
-  default;
-- can retain the latest mature frame containing a desired process or label;
-- renders terminal colors and attributes into a PNG with Pillow; and
-- replaces the output atomically only after capture and rendering succeed.
-
-The defaults reproduce the repository's intended presentation:
+## Canonical presentation
 
 | Setting | Default |
 |---|---:|
-| Terminal geometry | 188 columns × 46 rows |
-| Preferred font | Iosevka Term Nerd Font Mono |
-| Font size | 19 px |
-| Character cell | 10 × 20 px |
-| Canvas margin | 4 px |
-| Output image | 1888 × 928 px |
+| Terminal geometry | 120 columns × 48 rows |
+| Terminal | Ghostty |
+| Font | JetBrainsMono Nerd Font Mono, 14 pt |
+| Theme | Tokyo Night |
+| Gauge style | `3/4` |
+| Window decoration/padding | disabled / zero |
 | Capture duration | 13 seconds |
-| Mature-frame threshold | 8 seconds |
+| CPU load | four affinity-spread workers |
+| GPU load | repeating 20/45/70/100% BF16 matrix-multiply duty sweep |
 | Output | `docs/screenshot.png` |
 
-Fontconfig resolves font family names and the script prints the exact regular
-and bold files used. Pass explicit font paths when Fontconfig is unavailable or
-when exact font files must be selected.
+On the maintainer's current 1.25× niri output, the 120 × 48 Ghostty surface is
+captured as a 1650 × 1478 RGBA PNG. Pixel dimensions may differ with compositor
+scale, but the script fails unless the actual child PTY is exactly 120 × 48.
 
-## One-Time Setup
+## Why Ghostty and niri are used
 
-Run from the repository root. Use a disposable virtual environment so these
-packages do not modify the project or system Python environments:
+Ghostty renders terminal graphics as cell-bounded sprites. Ordinary font
+rendering can omit Braille or let full-block glyphs overlap adjacent lines.
+The generator launches a dedicated undecorated Ghostty window, asks niri to
+float it, reads the child PTY's real dimensions, and resizes proportionally
+until the requested grid is exact. It then captures that specific window by ID.
+
+Every run uses a unique temporary `XDG_CONFIG_HOME`, with all amdtop sections
+expanded. Before capture, the script verifies the state still has every section
+expanded and the requested theme selected. After niri finishes writing the PNG,
+the script terminates amdtop and waits for Ghostty to close naturally. Direct
+window closure is only an error-cleanup fallback, avoiding Ghostty's warning
+about killing a running process.
+
+## Requirements
+
+Run on the Arch/niri workstation used for release screenshots. Required tools:
+
+- `ghostty` and `niri` on an active niri Wayland session;
+- `JetBrainsMono Nerd Font Mono`;
+- Rust/Cargo plus amdtop's normal native build dependencies;
+- `mamba` environment `therock` with ROCm-enabled PyTorch for the synthetic GPU
+  sweep.
+
+Verify the relevant environment before capture:
+
+```sh
+ghostty +show-face --string='A░▊█⠀⣀⣿─│╭╮'
+mamba run -n therock python - <<'PY'
+import torch
+print(torch.__version__, torch.cuda.is_available())
+PY
+```
+
+Ghostty should report JetBrains Mono for text and internal sprites for terminal
+graphics. PyTorch must report a usable ROCm/CUDA device.
+
+## Generate the canonical screenshot
+
+From the repository root:
+
+```sh
+python3 scripts/generate_ghostty_screenshot.py
+```
+
+The generator builds `target/screenshot/debug/amdtop` with `Cargo.lock`, starts
+bounded CPU and GPU workloads, captures the mature window, replaces
+`docs/screenshot.png` atomically, and cleans up every child process.
+
+Useful development variants:
+
+```sh
+# Reuse the existing isolated binary and write a temporary preview.
+python3 scripts/generate_ghostty_screenshot.py \
+  --no-build \
+  --capture-seconds 8 \
+  --output /tmp/amdtop-preview.png
+
+# Inspect natural system activity without the synthetic GPU sweep.
+python3 scripts/generate_ghostty_screenshot.py \
+  --no-gpu-load \
+  --cpu-load-cores none \
+  --output /tmp/amdtop-idle.png
+```
+
+The deterministic GPU workload is `scripts/gpu_load.py`. It sets its Linux
+process name to `amdtop-gpu-load`, allocates bounded BF16 matrices, and repeats
+20/45/70/100% duty phases. The sweep is intended to leave a multicolor GPU
+Braille history rather than a flat full-utilization graph. It has a hard runtime
+and is always terminated during generator cleanup.
+
+## Controls
+
+Run `python3 scripts/generate_ghostty_screenshot.py --help` for all options.
+The main controls are:
+
+- `--columns` / `--rows`: required terminal grid;
+- `--font-family` / `--font-size`: Ghostty font selection;
+- `--theme` / `--block-style`: isolated amdtop state;
+- `--capture-seconds`: history maturity;
+- `--cpu-load-cores` / `--cpu-load-workers`: deterministic CPU activity;
+- `--gpu-load` / `--no-gpu-load`, `--gpu-load-env`, and
+  `--gpu-matrix-size`: synthetic ROCm workload;
+- `--target-dir`, `--binary`, and `--no-build`: isolated build selection;
+- `--output`: atomic PNG destination.
+
+## Portable fallback and text inspection
+
+For development outside Ghostty+niri, install the pinned Pillow/pyte
+requirements in a disposable environment:
 
 ```sh
 python3 -m venv /tmp/amdtop-screenshot-venv
@@ -51,135 +126,37 @@ python3 -m venv /tmp/amdtop-screenshot-venv
   --requirement scripts/requirements-screenshot.txt
 ```
 
-The pinned requirements are the rendering contract. Update them deliberately,
-regenerate to a temporary output, and visually compare the result before
-changing `docs/screenshot.png`.
-
-The preferred font must also be installed. To inspect what Fontconfig will use:
-
-```sh
-fc-match 'Iosevka Term Nerd Font Mono'
-fc-match 'Iosevka Term Nerd Font Mono:style=Bold'
-```
-
-A different monospace font can be supplied with `--font` and `--bold-font`.
-Choose one with box-drawing, block, and Braille glyph coverage.
-
-## Generate a Screenshot
-
-For a basic capture with variable CPU activity:
+Then use the legacy renderer for a text dump or approximate preview:
 
 ```sh
 /tmp/amdtop-screenshot-venv/bin/python \
   scripts/generate_screenshot.py \
-  --dump-text /tmp/amdtop-screenshot.txt
-```
-
-This updates `docs/screenshot.png`. During layout experiments, write elsewhere
-so a failed experiment cannot replace the reviewed image:
-
-```sh
-/tmp/amdtop-screenshot-venv/bin/python \
-  scripts/generate_screenshot.py \
-  --output /tmp/amdtop-screenshot.png \
-  --dump-text /tmp/amdtop-screenshot.txt
-```
-
-The script stops its amdtop child and CPU load workers on success, failure, or
-interruption. It does not stop an external GPU workload.
-
-## Capture Representative GPU Process Activity
-
-Start a trusted GPU workload separately before invoking the generator. For the
-current dual-GPU screenshot, `llama-bench` was already running in a loop. Do not
-put model paths or workload-specific commands in this repository.
-
-Confirm the workload and then require a frame in which amdtop reports it:
-
-```sh
-pgrep -a -x llama-bench
-
-/tmp/amdtop-screenshot-venv/bin/python \
-  scripts/generate_screenshot.py \
-  --prefer-text llama-bench \
-  --require-text \
-  --dump-text /tmp/amdtop-screenshot.txt
-```
-
-`--prefer-text` retains the latest stable frame after the mature-frame threshold
-that contains the text. `--require-text` makes absence an error and leaves the
-existing PNG untouched. This is useful for workloads that restart with new
-PIDs. Change the preferred text when demonstrating another process or feature.
-
-CPU cores are selected from the generator's affinity mask and spread across the
-available set. To reproduce a known workstation layout or disable synthetic
-CPU load:
-
-```sh
-# Explicit cores; each receives a different repeating duty cycle.
-/tmp/amdtop-screenshot-venv/bin/python \
-  scripts/generate_screenshot.py --cpu-load-cores 0,5,16,23
-
-# Preserve the machine's natural CPU activity.
-/tmp/amdtop-screenshot-venv/bin/python \
-  scripts/generate_screenshot.py --cpu-load-cores none
-```
-
-The explicit list must be valid for the current process affinity mask.
-
-## Adjust Layout and Rendering
-
-Every presentation parameter has a command-line option. For example:
-
-```sh
-/tmp/amdtop-screenshot-venv/bin/python \
-  scripts/generate_screenshot.py \
-  --columns 176 \
+  --columns 120 \
   --rows 48 \
-  --font 'Iosevka Term Nerd Font Mono' \
-  --font-size 18 \
-  --cell-width 9 \
-  --cell-height 19 \
-  --margin 4 \
-  --output /tmp/amdtop-layout-test.png
+  --output /tmp/amdtop-portable.png \
+  --dump-text /tmp/amdtop-screenshot.txt
 ```
 
-Useful controls include:
+Do not replace the canonical image with this output without explicitly deciding
+to return to font-based terminal-graphics rendering.
 
-- `--columns` and `--rows`: terminal layout and section allocation;
-- `--font`, `--bold-font`, and `--font-size`: glyph appearance;
-- `--cell-width`, `--cell-height`, and `--text-offset-y`: character grid and
-  baseline alignment;
-- `--theme` and `--block-style`: isolated amdtop presentation state;
-- `--capture-seconds` and `--min-candidate-seconds`: history depth and frame
-  selection;
-- `--default-fg` and `--default-bg`: terminal defaults used by the renderer;
-- `--target-dir`: isolated Cargo output used for the canonical build;
-- `--binary` and `--no-build`: capture a specific already-built executable;
-- `--print-screen` and `--dump-text`: inspect the selected terminal cells.
+## Review checklist
 
-Run the generator with `--help` for the complete interface. Record intentional
-changes to the canonical defaults in the script, this table, and
-the changelog together.
-
-## Review Checklist
-
-Do not commit a generated screenshot without reviewing both the image and its
-text dump.
+Do not commit a generated screenshot without reviewing it.
 
 - [ ] Confirm the generator built the intended amdtop revision.
-- [ ] Confirm the printed terminal geometry, pixel dimensions, and resolved font
-      paths are expected.
+- [ ] Confirm it reports an exact 120 × 48 Ghostty grid and the expected font.
 - [ ] Inspect every section for clipped labels, borders, columns, and footer
       controls.
-- [ ] Confirm histories show useful activity without obscuring current values.
-- [ ] Confirm the process table contains only intentional, non-sensitive process
-      names and realistic values.
-- [ ] Check the text dump for hostnames, usernames, private paths, model names,
-      logs, or other machine-specific data.
-- [ ] Keep enough process-table room for representative rows, but remove
-      excessive empty height.
-- [ ] Confirm the PNG is RGB and has the expected dimensions:
+- [ ] Confirm CPU and GPU Braille histories show useful activity and gradient
+      colors.
+- [ ] Confirm MEM/SWP blocks remain inside their own rows.
+- [ ] Confirm all four sections are expanded.
+- [ ] Confirm process names contain no private or workload-specific data beyond
+      the intentional `amdtop-gpu-load` helper.
+- [ ] Confirm the image contains no hostname, username, private path, model
+      name, logs, or unrelated sensitive process name.
+- [ ] Confirm the PNG mode and dimensions:
 
   ```sh
   file docs/screenshot.png
@@ -190,11 +167,13 @@ text dump.
   PY
   ```
 
-- [ ] Run the helper tests and repository checks:
+- [ ] Run the helper and repository checks:
 
   ```sh
-  /tmp/amdtop-screenshot-venv/bin/python -m unittest \
-    scripts.test_generate_screenshot
+  python3 -m unittest \
+    scripts.test_generate_screenshot \
+    scripts.test_generate_ghostty_screenshot \
+    scripts.test_gpu_load
   cargo fmt --all --check
   cargo clippy --locked --all-targets --all-features -- -D warnings
   cargo test --locked --all-targets --all-features
@@ -204,6 +183,7 @@ text dump.
 - [ ] Review `git diff --stat`, `git status -sb`, and the rendered PNG before
       staging explicit files.
 
-Screenshot generation is hardware- and font-dependent and therefore does not
-run in CI. The helper tests cover deterministic color, geometry, and CPU-core
-selection behavior; maintainers must perform the final visual review.
+Screenshot generation remains hardware-, compositor-, and font-dependent and
+does not run in CI. Unit tests cover deterministic geometry, state validation,
+window selection, and GPU duty scheduling; release review covers the actual
+rendering and process lifecycle.

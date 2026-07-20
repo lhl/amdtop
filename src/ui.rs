@@ -1,4 +1,4 @@
-//! Modern TUI rendering: rounded borders, btop-themed gradients, braille
+//! Modern TUI rendering: rounded borders, theme-defined gradients, braille
 //! history graphs, collapsible CPU/GPU/NPU/Processes sections.
 //!
 //! GPU layout (nvitop/nvtop-inspired): one horizontal band per GPU.

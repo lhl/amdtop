@@ -1,3 +1,4 @@
+use libamdgpu_top::AMDGPU::MetricsInfo;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -13,7 +14,7 @@ use super::{render_bar, section_block};
 const GPU_VALUE_WIDTH: usize = 15;
 
 pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
-    let block = section_block(app, Section::Gpu, "GPU", SectionBox::Mem);
+    let block = section_block(app, Section::Gpu, "GPU", SectionBox::Gpu);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -52,7 +53,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
 
         let left = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1); 4])
+            .constraints([Constraint::Length(1); 5])
             .split(cols[0]);
 
         // line 0: GPU index + name
@@ -91,10 +92,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
                     format!(" {temp_s} "),
                     Style::default().fg(app.theme.temp().sample(0.5)),
                 ),
-                Span::styled(
-                    format!(" {pwr_s} "),
-                    Style::default().fg(app.theme.graph_text()),
-                ),
+                Span::styled(format!(" {pwr_s} "), Style::default().fg(app.theme.power())),
             ])),
             left[2],
         );
@@ -104,16 +102,27 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             Paragraph::new(Line::from(vec![
                 Span::styled(
                     format!(" {sclk_s} "),
-                    Style::default().fg(app.theme.proc_misc()),
+                    Style::default().fg(app.theme.clock()),
                 ),
                 Span::styled(
                     format!(" {mclk_s} "),
-                    Style::default().fg(app.theme.proc_misc()),
+                    Style::default().fg(app.theme.clock()),
                 ),
-                Span::styled(fan_s, Style::default().fg(app.theme.graph_text())),
+                Span::styled(fan_s, Style::default().fg(app.theme.fan())),
             ])),
             left[3],
         );
+        // line 4: memory-controller utilization and/or SoC DRAM throughput
+        let bandwidth = gpu_memory_bandwidth(a);
+        if !bandwidth.is_empty() {
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    format!(" {bandwidth}"),
+                    Style::default().fg(app.theme.bandwidth()),
+                ))),
+                left[4],
+            );
+        }
 
         // right: GPU gauge, MEM gauge, then two side-by-side history graphs
         // (util | mem), double-height, each with a label below.
@@ -161,7 +170,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         render_graph(
             f,
             gcols[0],
-            app.hist_gpu[i].braille_graph(gcols[0].width as usize, 3, app.theme.cpu()),
+            app.hist_gpu[i].braille_graph(gcols[0].width as usize, 3, app.theme.gpu()),
         );
         render_graph(
             f,
@@ -178,7 +187,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 "GPU util",
-                Style::default().fg(app.theme.cpu().sample(0.6)),
+                Style::default().fg(app.theme.gpu().sample(0.6)),
             ))),
             lcols[0],
         );
@@ -242,6 +251,52 @@ fn gpu_clocks_fan(a: &libamdgpu_top::app::AppAmdgpuTop) -> (String, String, Stri
     (sclk, mclk, fan)
 }
 
+fn gpu_memory_bandwidth(a: &libamdgpu_top::app::AppAmdgpuTop) -> String {
+    let (dram_reads, dram_writes) = a.stat.metrics.as_ref().map_or((None, None), |metrics| {
+        (
+            metrics.get_average_dram_reads(),
+            metrics.get_average_dram_writes(),
+        )
+    });
+
+    memory_bandwidth_text(a.stat.activity.umc, dram_reads, dram_writes)
+}
+
+fn memory_bandwidth_text(
+    umc_percent: Option<u16>,
+    dram_reads_mb_s: Option<u16>,
+    dram_writes_mb_s: Option<u16>,
+) -> String {
+    let utilization = supported_metric(umc_percent).map(|percent| format!("MBW {percent}%"));
+
+    let reads = supported_metric(dram_reads_mb_s);
+    let writes = supported_metric(dram_writes_mb_s);
+    let throughput = (reads.is_some() || writes.is_some()).then(|| {
+        let reads = reads.map_or("-".into(), fmt_bandwidth_rate);
+        let writes = writes.map_or("-".into(), fmt_bandwidth_rate);
+        format!("DRAM R{reads} W{writes}")
+    });
+
+    match (utilization, throughput) {
+        (Some(utilization), Some(throughput)) => format!("{utilization} | {throughput}"),
+        (Some(utilization), None) => utilization,
+        (None, Some(throughput)) => throughput,
+        (None, None) => String::new(),
+    }
+}
+
+fn supported_metric(value: Option<u16>) -> Option<u16> {
+    value.filter(|value| *value != u16::MAX)
+}
+
+fn fmt_bandwidth_rate(mb_per_second: u16) -> String {
+    if mb_per_second >= 1_000 {
+        format!("{:.1}G/s", f64::from(mb_per_second) / 1_000.0)
+    } else {
+        format!("{mb_per_second}M/s")
+    }
+}
+
 fn bus_id(app: &libamdgpu_top::app::AppAmdgpuTop) -> String {
     app.device_path.pci.to_string()
 }
@@ -272,12 +327,51 @@ fn short_name(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{effective_power_cap, fmt_bytes, power_text, short_name};
+    use super::{
+        effective_power_cap, fmt_bandwidth_rate, fmt_bytes, memory_bandwidth_text, power_text,
+        short_name,
+    };
 
     #[test]
     fn byte_formatting_uses_binary_units() {
         assert_eq!(fmt_bytes(512 << 20), "512M");
         assert_eq!(fmt_bytes(3 << 30), "3.0G");
+    }
+
+    #[test]
+    fn bandwidth_combines_memory_utilization_and_dram_throughput() {
+        assert_eq!(
+            memory_bandwidth_text(Some(42), Some(10_860), Some(5_257)),
+            "MBW 42% | DRAM R10.9G/s W5.3G/s"
+        );
+        assert_eq!(memory_bandwidth_text(Some(42), None, None), "MBW 42%");
+    }
+
+    #[test]
+    fn bandwidth_falls_back_to_dram_throughput() {
+        assert_eq!(
+            memory_bandwidth_text(None, Some(10_860), Some(5_257)),
+            "DRAM R10.9G/s W5.3G/s"
+        );
+        assert_eq!(
+            memory_bandwidth_text(None, Some(890), Some(0)),
+            "DRAM R890M/s W0M/s"
+        );
+        assert_eq!(fmt_bandwidth_rate(999), "999M/s");
+        assert_eq!(fmt_bandwidth_rate(1_000), "1.0G/s");
+    }
+
+    #[test]
+    fn bandwidth_handles_unsupported_metrics() {
+        assert_eq!(memory_bandwidth_text(None, None, None), "");
+        assert_eq!(
+            memory_bandwidth_text(None, Some(u16::MAX), Some(u16::MAX)),
+            ""
+        );
+        assert_eq!(
+            memory_bandwidth_text(None, Some(u16::MAX), Some(512)),
+            "DRAM R- W512M/s"
+        );
     }
 
     #[test]

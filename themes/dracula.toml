@@ -1,0 +1,72 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/dracula.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+
+schema = 1
+name = "dracula"
+
+[ui]
+background = "#282a36"
+foreground = "#f8f8f2"
+title = "#f8f8f2"
+highlight = "#6272a4"
+selected_background = "#ff79c6"
+selected_foreground = "#f8f8f2"
+inactive = "#44475a"
+graph_text = "#f8f8f2"
+misc = "#bd93f9"
+
+[stats]
+clock = "#bd93f9"
+power = "#f8f8f2"
+fan = "#f8f8f2"
+bandwidth = "#f8f8f2"
+
+[borders]
+cpu = "#bd93f9"
+gpu = "#50fa7b"
+memory = "#50fa7b"
+npu = "#ff5555"
+processes = "#8be9fd"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#bd93f9" },
+  { at = 0.5, color = "#ff79c6" },
+  { at = 1.0, color = "#ff33a8" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#bd93f9" },
+  { at = 0.5, color = "#8be9fd" },
+  { at = 1.0, color = "#50fa7b" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#bd93f9" },
+  { at = 0.5, color = "#8be9fd" },
+  { at = 1.0, color = "#50fa7b" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#96faaf" },
+  { at = 0.5, color = "#50fa7b" },
+  { at = 1.0, color = "#0dfa49" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#50fa7b" },
+  { at = 0.5, color = "#59b690" },
+  { at = 1.0, color = "#6272a4" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#50fa7b" },
+  { at = 0.5, color = "#59b690" },
+  { at = 1.0, color = "#6272a4" },
+]

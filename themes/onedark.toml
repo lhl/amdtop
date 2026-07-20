@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/onedark.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Theme: OneDark
+# By: Vitor Melo
+
+schema = 1
+name = "onedark"
+
+[ui]
+background = "#282c34"
+foreground = "#abb2bf"
+title = "#abb2bf"
+highlight = "#61afef"
+selected_background = "#2c313c"
+selected_foreground = "#abb2bf"
+inactive = "#5c6370"
+graph_text = "#abb2bf"
+misc = "#61afef"
+
+[stats]
+clock = "#61afef"
+power = "#abb2bf"
+fan = "#abb2bf"
+bandwidth = "#abb2bf"
+
+[borders]
+cpu = "#5c6370"
+gpu = "#5c6370"
+memory = "#5c6370"
+npu = "#5c6370"
+processes = "#5c6370"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#98c379" },
+  { at = 0.5, color = "#e5c07b" },
+  { at = 1.0, color = "#e06c75" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#98c379" },
+  { at = 0.5, color = "#e5c07b" },
+  { at = 1.0, color = "#e06c75" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#98c379" },
+  { at = 0.5, color = "#e5c07b" },
+  { at = 1.0, color = "#e06c75" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#98c379" },
+  { at = 0.5, color = "#e5c07b" },
+  { at = 1.0, color = "#e06c75" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#98c379" },
+  { at = 0.5, color = "#e5c07b" },
+  { at = 1.0, color = "#e06c75" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#98c379" },
+  { at = 0.5, color = "#e5c07b" },
+  { at = 1.0, color = "#e06c75" },
+]

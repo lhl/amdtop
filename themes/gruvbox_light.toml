@@ -1,0 +1,73 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/gruvbox_light.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Btop gruvbox_light theme
+# by kk9uk
+
+schema = 1
+name = "gruvbox_light"
+
+[ui]
+background = "#fbf1c7"
+foreground = "#3c3836"
+title = "#3c3836"
+highlight = "#cc241d"
+selected_background = "#f2e5bc"
+selected_foreground = "#8f3f71"
+inactive = "#ebdbb2"
+graph_text = "#a89984"
+misc = "#98971a"
+
+[stats]
+clock = "#98971a"
+power = "#a89984"
+fan = "#a89984"
+bandwidth = "#a89984"
+
+[borders]
+cpu = "#a89984"
+gpu = "#a89984"
+memory = "#a89984"
+npu = "#a89984"
+processes = "#a89984"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#98971a" },
+  { at = 1.0, color = "#cc241d" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#427b58" },
+  { at = 0.5, color = "#d79921" },
+  { at = 1.0, color = "#cc241d" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#427b58" },
+  { at = 0.5, color = "#d79921" },
+  { at = 1.0, color = "#cc241d" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#427b58" },
+  { at = 0.5, color = "#d65d0e" },
+  { at = 1.0, color = "#cc241d" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#427b58" },
+  { at = 0.5, color = "#af3a03" },
+  { at = 1.0, color = "#cc241d" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#427b58" },
+  { at = 0.5, color = "#af3a03" },
+  { at = 1.0, color = "#cc241d" },
+]

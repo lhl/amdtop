@@ -44,6 +44,11 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         .enumerate()
         .flat_map(|(gi, a)| {
             a.stat.fdinfo.proc_usage.iter().map(move |pu| {
+                let gpu_activity = [pu.usage.gfx, pu.usage.compute, pu.usage.dma]
+                    .into_iter()
+                    .max()
+                    .unwrap_or(0)
+                    .clamp(0, 100) as f64;
                 Row::new(vec![
                     gi.to_string(),
                     pu.pid.to_string(),
@@ -56,6 +61,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
                     pu.usage.dma.to_string(),
                     pu.usage.cpu.to_string(),
                 ])
+                .style(Style::default().fg(app.theme.process().sample(gpu_activity / 100.0)))
             })
         })
         .collect();

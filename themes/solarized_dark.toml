@@ -1,0 +1,73 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/solarized_dark.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop solarized theme
+#by aristocratos
+
+schema = 1
+name = "solarized_dark"
+
+[ui]
+background = "#002b36"
+foreground = "#eee8d5"
+title = "#fdf6e3"
+highlight = "#b58900"
+selected_background = "#073642"
+selected_foreground = "#d6a200"
+inactive = "#073642"
+graph_text = "#eee8d5"
+misc = "#bad600"
+
+[stats]
+clock = "#bad600"
+power = "#eee8d5"
+fan = "#eee8d5"
+bandwidth = "#eee8d5"
+
+[borders]
+cpu = "#586e75"
+gpu = "#586e75"
+memory = "#586e75"
+npu = "#586e75"
+processes = "#586e75"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#268bd2" },
+  { at = 0.5, color = "#ccb5f7" },
+  { at = 1.0, color = "#fc5378" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#adc700" },
+  { at = 0.5, color = "#d6a200" },
+  { at = 1.0, color = "#e65317" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#adc700" },
+  { at = 0.5, color = "#d6a200" },
+  { at = 1.0, color = "#e65317" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#6e1718" },
+  { at = 1.0, color = "#e02f30" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#adc700" },
+  { at = 0.5, color = "#d6a200" },
+  { at = 1.0, color = "#e65317" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#adc700" },
+  { at = 0.5, color = "#d6a200" },
+  { at = 1.0, color = "#e65317" },
+]

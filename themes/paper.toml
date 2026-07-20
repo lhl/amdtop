@@ -1,0 +1,73 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/paper.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Bashtop Paper theme
+# inspired by @yorickpeterse's vim-paper theme at https://gitlab.com/yorickpeterse/vim-paper
+
+schema = 1
+name = "paper"
+
+[ui]
+background = "#F2EEDE"
+foreground = "#00"
+title = "#00"
+highlight = "#CC3E28"
+selected_background = "#D8D5C7"
+selected_foreground = "#00"
+inactive = "#d8d5c7"
+graph_text = "#00"
+misc = "#00"
+
+[stats]
+clock = "#00"
+power = "#00"
+fan = "#00"
+bandwidth = "#00"
+
+[borders]
+cpu = "#00"
+gpu = "#00"
+memory = "#00"
+npu = "#00"
+processes = "#00"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#55" },
+  { at = 0.5, color = "#00" },
+  { at = 1.0, color = "#CC3E28" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#55" },
+  { at = 0.5, color = "#00" },
+  { at = 1.0, color = "#CC3E28" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#55" },
+  { at = 0.5, color = "#00" },
+  { at = 1.0, color = "#CC3E28" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#CC3E28" },
+  { at = 1.0, color = "#CC3E28" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#55" },
+  { at = 0.5, color = "#00" },
+  { at = 1.0, color = "#CC3E28" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#55" },
+  { at = 0.5, color = "#00" },
+  { at = 1.0, color = "#CC3E28" },
+]

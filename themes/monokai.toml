@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/monokai.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop monokai theme
+#by aristocratos
+
+schema = 1
+name = "monokai"
+
+[ui]
+background = "#060604"
+foreground = "#F8F8F2"
+title = "#F8F8F2"
+highlight = "#F92672"
+selected_background = "#7a1137"
+selected_foreground = "#F8F8F2"
+inactive = "#595647"
+graph_text = "#797667"
+misc = "#A6E22E"
+
+[stats]
+clock = "#A6E22E"
+power = "#797667"
+fan = "#797667"
+bandwidth = "#797667"
+
+[borders]
+cpu = "#75715E"
+gpu = "#75715E"
+memory = "#75715E"
+npu = "#75715E"
+processes = "#75715E"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#7976B7" },
+  { at = 0.5, color = "#D8B8B2" },
+  { at = 1.0, color = "#F92672" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#A6E22E" },
+  { at = 0.5, color = "#F8F8F2" },
+  { at = 1.0, color = "#F92672" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#A6E22E" },
+  { at = 0.5, color = "#F8F8F2" },
+  { at = 1.0, color = "#F92672" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#75715E" },
+  { at = 0.5, color = "#F92672" },
+  { at = 1.0, color = "#ff87b2" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#A6E22E" },
+  { at = 0.5, color = "#F8F8F2" },
+  { at = 1.0, color = "#F92672" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#A6E22E" },
+  { at = 0.5, color = "#F8F8F2" },
+  { at = 1.0, color = "#F92672" },
+]

@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/whiteout.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop "whiteout" theme
+#by aristocratos
+
+schema = 1
+name = "whiteout"
+
+[ui]
+background = "#ff"
+foreground = "#30"
+title = "#10"
+highlight = "#284d75"
+selected_background = "#15283d"
+selected_foreground = "#ff"
+inactive = "#dd"
+graph_text = "#30"
+misc = "#03521d"
+
+[stats]
+clock = "#03521d"
+power = "#30"
+fan = "#30"
+bandwidth = "#30"
+
+[borders]
+cpu = "#1a361e"
+gpu = "#3d3c14"
+memory = "#3d3c14"
+npu = "#1a1742"
+processes = "#3b1515"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#184567" },
+  { at = 0.5, color = "#122c87" },
+  { at = 1.0, color = "#9e0061" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#0b8e44" },
+  { at = 0.5, color = "#a49104" },
+  { at = 1.0, color = "#8d0202" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#0b8e44" },
+  { at = 0.5, color = "#a49104" },
+  { at = 1.0, color = "#8d0202" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#ff4769" },
+  { at = 0.5, color = "#d9626d" },
+  { at = 1.0, color = "#3b1f1c" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#0b8e44" },
+  { at = 0.5, color = "#a49104" },
+  { at = 1.0, color = "#8d0202" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#0b8e44" },
+  { at = 0.5, color = "#a49104" },
+  { at = 1.0, color = "#8d0202" },
+]

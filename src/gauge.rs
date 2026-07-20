@@ -75,6 +75,7 @@ pub fn block_style(i: usize) -> &'static BlockStyle {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Kind {
+    Cpu,
     Gpu,
     Mem,
     Npu,
@@ -83,6 +84,7 @@ pub enum Kind {
 impl Kind {
     fn util_kind(self) -> UtilKind {
         match self {
+            Kind::Cpu => UtilKind::Cpu,
             Kind::Gpu => UtilKind::Gpu,
             Kind::Mem => UtilKind::Mem,
             Kind::Npu => UtilKind::Npu,

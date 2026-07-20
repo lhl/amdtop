@@ -1,0 +1,68 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/greyscale.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+#Bashtop grayscale theme
+#by aristocratos
+
+schema = 1
+name = "greyscale"
+
+[ui]
+background = "#00"
+foreground = "#bb"
+title = "#cc"
+highlight = "#90"
+selected_background = "#ff"
+selected_foreground = "#00"
+inactive = "#30"
+graph_text = "#bb"
+misc = "#90"
+
+[stats]
+clock = "#90"
+power = "#bb"
+fan = "#bb"
+bandwidth = "#bb"
+
+[borders]
+cpu = "#90"
+gpu = "#90"
+memory = "#90"
+npu = "#90"
+processes = "#90"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#50" },
+  { at = 1.0, color = "#ff" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#50" },
+  { at = 1.0, color = "#ff" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#50" },
+  { at = 1.0, color = "#ff" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#50" },
+  { at = 1.0, color = "#ff" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#50" },
+  { at = 1.0, color = "#ff" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#50" },
+  { at = 1.0, color = "#ff" },
+]

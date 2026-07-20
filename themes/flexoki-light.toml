@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/flexoki-light.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Flexoki Light theme (https://stephango.com/flexoki)
+# by Steph Ango
+
+schema = 1
+name = "flexoki-light"
+
+[ui]
+background = "#FFFCF0"
+foreground = "#343331"
+title = "#100F0F"
+highlight = "#BC5215"
+selected_background = "#E6E4D9"
+selected_foreground = "#100F0F"
+inactive = "#B7B5AC"
+graph_text = "#6F6E69"
+misc = "#66800B"
+
+[stats]
+clock = "#66800B"
+power = "#6F6E69"
+fan = "#6F6E69"
+bandwidth = "#6F6E69"
+
+[borders]
+cpu = "#205EA6"
+gpu = "#66800B"
+memory = "#66800B"
+npu = "#A02F6F"
+processes = "#24837B"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#205EA6" },
+  { at = 0.5, color = "#5E409D" },
+  { at = 1.0, color = "#AF3029" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#24837B" },
+  { at = 0.5, color = "#AD8301" },
+  { at = 1.0, color = "#AF3029" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#24837B" },
+  { at = 0.5, color = "#AD8301" },
+  { at = 1.0, color = "#AF3029" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#66800B" },
+  { at = 0.5, color = "#BC5215" },
+  { at = 1.0, color = "#AF3029" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#66800B" },
+  { at = 0.5, color = "#AD8301" },
+  { at = 1.0, color = "#AF3029" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#66800B" },
+  { at = 0.5, color = "#AD8301" },
+  { at = 1.0, color = "#AF3029" },
+]

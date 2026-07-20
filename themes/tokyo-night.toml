@@ -1,0 +1,74 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/tokyo-night.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Theme: tokyo-night
+# By: Pascal Jaeger
+
+schema = 1
+name = "tokyo-night"
+
+[ui]
+background = "#1a1b26"
+foreground = "#cfc9c2"
+title = "#cfc9c2"
+highlight = "#7dcfff"
+selected_background = "#414868"
+selected_foreground = "#cfc9c2"
+inactive = "#565f89"
+graph_text = "#cfc9c2"
+misc = "#7dcfff"
+
+[stats]
+clock = "#7dcfff"
+power = "#cfc9c2"
+fan = "#cfc9c2"
+bandwidth = "#cfc9c2"
+
+[borders]
+cpu = "#565f89"
+gpu = "#565f89"
+memory = "#565f89"
+npu = "#565f89"
+processes = "#565f89"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#9ece6a" },
+  { at = 0.5, color = "#e0af68" },
+  { at = 1.0, color = "#f7768e" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#9ece6a" },
+  { at = 0.5, color = "#e0af68" },
+  { at = 1.0, color = "#f7768e" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#9ece6a" },
+  { at = 0.5, color = "#e0af68" },
+  { at = 1.0, color = "#f7768e" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#9ece6a" },
+  { at = 0.5, color = "#e0af68" },
+  { at = 1.0, color = "#f7768e" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#9ece6a" },
+  { at = 0.5, color = "#e0af68" },
+  { at = 1.0, color = "#f7768e" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#9ece6a" },
+  { at = 0.5, color = "#e0af68" },
+  { at = 1.0, color = "#f7768e" },
+]

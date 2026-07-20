@@ -1,0 +1,75 @@
+# Modified for amdtop native theme schema 1 in 2026.
+# Source: https://github.com/aristocratos/btop/blob/v1.4.7/themes/elementarish.theme
+# btop source commit: 6e39144aaf5a6bc01b9f795010b0914431067183
+# Theme: Elementarish
+# (inspired by Elementary OS)
+# By: Dennis Mayr
+
+schema = 1
+name = "elementarish"
+
+[ui]
+background = "#333333"
+foreground = "#eee8d5"
+title = "#eee8d5"
+highlight = "#d1302c"
+selected_background = "#268ad0"
+selected_foreground = "#eee8d5"
+inactive = "#657b83"
+graph_text = "#eee8d5"
+misc = "#268ad0"
+
+[stats]
+clock = "#268ad0"
+power = "#eee8d5"
+fan = "#eee8d5"
+bandwidth = "#eee8d5"
+
+[borders]
+cpu = "#657b83"
+gpu = "#657b83"
+memory = "#657b83"
+npu = "#657b83"
+processes = "#657b83"
+
+[gradients.temperature]
+stops = [
+  { at = 0.0, color = "#859900" },
+  { at = 0.5, color = "#b28602" },
+  { at = 1.0, color = "#d1302c" },
+]
+
+[gradients.cpu]
+stops = [
+  { at = 0.0, color = "#859900" },
+  { at = 0.5, color = "#b28602" },
+  { at = 1.0, color = "#d1302c" },
+]
+
+[gradients.gpu]
+stops = [
+  { at = 0.0, color = "#859900" },
+  { at = 0.5, color = "#b28602" },
+  { at = 1.0, color = "#d1302c" },
+]
+
+[gradients.memory]
+stops = [
+  { at = 0.0, color = "#859900" },
+  { at = 0.5, color = "#b28602" },
+  { at = 1.0, color = "#d1302c" },
+]
+
+[gradients.npu]
+stops = [
+  { at = 0.0, color = "#859900" },
+  { at = 0.5, color = "#b28602" },
+  { at = 1.0, color = "#d1302c" },
+]
+
+[gradients.process]
+stops = [
+  { at = 0.0, color = "#859900" },
+  { at = 0.5, color = "#b28602" },
+  { at = 1.0, color = "#d1302c" },
+]

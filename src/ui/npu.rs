@@ -124,7 +124,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     if fdinfo_supported {
         let graph = app
             .hist_npu
-            .braille_graph(cols[1].width as usize, 2, app.theme.process());
+            .braille_graph(cols[1].width as usize, 2, app.theme.npu());
         let grows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Length(1)])
