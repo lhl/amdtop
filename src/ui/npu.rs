@@ -143,8 +143,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     }
 
     let rows: Vec<Row> = app
-        .apps
-        .iter()
+        .active_apps()
         .flat_map(|a| a.stat.xdna_fdinfo.proc_usage.iter())
         .map(|pu| {
             Row::new(vec![
@@ -193,8 +192,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn npu_ctx_count(app: &App) -> usize {
-    app.apps
-        .iter()
+    app.active_apps()
         .map(|a| a.stat.xdna_fdinfo.proc_usage.len())
         .sum()
 }

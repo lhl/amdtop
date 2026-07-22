@@ -29,16 +29,45 @@ impl Section {
     pub const ALL: [Section; 4] = [Section::Cpu, Section::Gpu, Section::Npu, Section::Processes];
 }
 
+pub struct GpuDevice {
+    pub device_path: DevicePath,
+    pub app: Option<AppAmdgpuTop>,
+    pub hist_gpu: History,
+    pub hist_mem: History,
+}
+
+impl GpuDevice {
+    fn new(device_path: DevicePath, app: Option<AppAmdgpuTop>) -> Self {
+        Self {
+            device_path,
+            app,
+            hist_gpu: History::new(HISTORY_CAPACITY),
+            hist_mem: History::new(HISTORY_CAPACITY),
+        }
+    }
+
+    pub fn is_sleeping(&self) -> bool {
+        !self.device_path.check_if_device_is_active()
+    }
+
+    fn try_activate(&mut self) -> bool {
+        let is_awake = self.device_path.check_if_device_is_active();
+        let device_path = self.device_path.clone();
+        activate_if_awake(&mut self.app, is_awake, || {
+            let amdgpu_dev = device_path.init().ok()?;
+            AppAmdgpuTop::new(amdgpu_dev, device_path, &AppOption::default())
+        })
+    }
+}
+
 pub struct App {
-    pub apps: Vec<AppAmdgpuTop>,
+    pub gpus: Vec<GpuDevice>,
     pub cpu: CpuSampler,
     pub mem: SystemMem,
     process_rss_kb: HashMap<i32, u64>,
     pub collapse: CollapseState,
     pub section: Section,
     pub hist_cpu: History,
-    pub hist_gpu: Vec<History>, // per app: gfx busy %
-    pub hist_mem: Vec<History>, // per app: memory pool %
     pub hist_npu: History,
     pub hist_cores: Vec<History>, // per logical CPU
     pub npu_info: Option<NpuInfo>,
@@ -71,10 +100,27 @@ impl App {
         for dp in &mut dps {
             dp.fill_amdgpu_device_name();
         }
-        let (apps, _suspended) =
-            AppAmdgpuTop::create_app_and_suspended_list(&dps, &AppOption::default());
-        let n = apps.len();
+        // Initialize only devices that are already awake. The backend's
+        // suspended-list helper wakes one device when every GPU is asleep,
+        // which is undesirable for a system monitor.
+        let apps: Vec<AppAmdgpuTop> = dps
+            .iter()
+            .filter(|device_path| device_path.check_if_device_is_active())
+            .filter_map(|device_path| {
+                let amdgpu_dev = device_path.init().ok()?;
+                AppAmdgpuTop::new(amdgpu_dev, device_path.clone(), &AppOption::default())
+            })
+            .collect();
         let npu_info = detect_npu(&apps);
+        let gpus: Vec<GpuDevice> = merge_devices(
+            dps.to_vec(),
+            apps,
+            |device_path| device_path.pci,
+            |app| app.device_path.pci,
+        )
+        .into_iter()
+        .map(|(device_path, app)| GpuDevice::new(device_path, app))
+        .collect();
         let has_npu = npu_info.is_some();
 
         // AppAmdgpuTop populates its shared process indexes once during
@@ -82,7 +128,11 @@ impl App {
         // without it, processes created or restarted after amdtop starts never
         // appear in the process table.
         let mut process_device_paths = dps;
-        if let Some(xdna_device_path) = apps.iter().find_map(|app| app.xdna_device_path.as_ref()) {
+        if let Some(xdna_device_path) = gpus
+            .iter()
+            .filter_map(|gpu| gpu.app.as_ref())
+            .find_map(|app| app.xdna_device_path.as_ref())
+        {
             process_device_paths.push(xdna_device_path.clone());
         }
         stat::spawn_update_index_thread(process_device_paths, PROCESS_INDEX_REFRESH_SECS);
@@ -97,15 +147,13 @@ impl App {
         let block_style = collapse.block_style % crate::gauge::BLOCK_STYLES.len();
 
         Self {
-            apps,
+            gpus,
             cpu: CpuSampler::default(),
             mem: SystemMem::default(),
             process_rss_kb: HashMap::new(),
             collapse,
             section: Section::Gpu,
             hist_cpu: History::new(HISTORY_CAPACITY),
-            hist_gpu: (0..n).map(|_| History::new(HISTORY_CAPACITY)).collect(),
-            hist_mem: (0..n).map(|_| History::new(HISTORY_CAPACITY)).collect(),
             hist_npu: History::new(HISTORY_CAPACITY),
             hist_cores: Vec::new(),
             npu_info,
@@ -154,9 +202,16 @@ impl App {
         crate::gauge::block_style(self.block_style).name
     }
 
+    pub fn active_apps(&self) -> impl Iterator<Item = &AppAmdgpuTop> {
+        self.gpus.iter().filter_map(|gpu| gpu.app.as_ref())
+    }
+
     pub fn sample(&mut self, interval: Duration) {
-        for app in &mut self.apps {
-            app.update(interval);
+        for gpu in &mut self.gpus {
+            gpu.try_activate();
+            if let Some(app) = gpu.app.as_mut() {
+                app.update(interval);
+            }
         }
         self.sample_process_memory();
         self.cpu.tick();
@@ -175,18 +230,23 @@ impl App {
             self.hist_cores[i].push(p.round() as u64);
         }
 
-        // GPU / MEM history per device
-        for (i, app) in self.apps.iter().enumerate() {
-            let gfx = app.stat.activity.gfx.unwrap_or(0) as u64;
-            self.hist_gpu[i].push(gfx);
-            let memory = gpu_mem_info(app);
-            self.hist_mem[i].push(memory.percent.round() as u64);
+        // GPU / MEM history per device. Leave sleeping-device histories
+        // untouched so sleep is not misrepresented as measured zero activity.
+        for gpu in &mut self.gpus {
+            if gpu.is_sleeping() {
+                continue;
+            }
+            if let Some(app) = gpu.app.as_ref() {
+                let gfx = app.stat.activity.gfx.unwrap_or(0) as u64;
+                gpu.hist_gpu.push(gfx);
+                let memory = gpu_mem_info(app);
+                gpu.hist_mem.push(memory.percent.round() as u64);
+            }
         }
 
         // NPU aggregate (sum of per-context npu%, clamped)
         let npu_sum = self
-            .apps
-            .iter()
+            .active_apps()
             .flat_map(|app| &app.stat.xdna_fdinfo.proc_usage)
             .map(|process| process.usage.npu.max(0))
             .sum::<i64>();
@@ -195,8 +255,7 @@ impl App {
 
     fn sample_process_memory(&mut self) {
         let pids: HashSet<i32> = self
-            .apps
-            .iter()
+            .active_apps()
             .flat_map(|app| &app.stat.fdinfo.proc_usage)
             .map(|process| process.pid)
             .collect();
@@ -253,6 +312,38 @@ impl App {
             Section::Processes => self.collapse.processes,
         }
     }
+}
+
+fn merge_devices<D, A, K: PartialEq>(
+    devices: Vec<D>,
+    mut active_apps: Vec<A>,
+    device_key: impl Fn(&D) -> K,
+    app_key: impl Fn(&A) -> K,
+) -> Vec<(D, Option<A>)> {
+    devices
+        .into_iter()
+        .map(|device| {
+            let key = device_key(&device);
+            let app = active_apps
+                .iter()
+                .position(|app| app_key(app) == key)
+                .map(|position| active_apps.remove(position));
+            (device, app)
+        })
+        .collect()
+}
+
+fn activate_if_awake<T>(
+    app: &mut Option<T>,
+    is_awake: bool,
+    initialize: impl FnOnce() -> Option<T>,
+) -> bool {
+    if app.is_some() || !is_awake {
+        return false;
+    }
+
+    *app = initialize();
+    app.is_some()
 }
 
 fn detect_npu(apps: &[AppAmdgpuTop]) -> Option<NpuInfo> {
@@ -397,7 +488,57 @@ fn memory_info(is_apu: bool, vram: (u64, u64), gtt: (u64, u64)) -> MemInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::{memory_info, parse_process_rss_kb};
+    use super::{activate_if_awake, memory_info, merge_devices, parse_process_rss_kb};
+
+    #[test]
+    fn device_merge_retains_sleeping_gpus_in_discovery_order() {
+        let devices = vec![1, 2, 3];
+        let active = vec![(3, "gpu3"), (1, "gpu1")];
+
+        let merged = merge_devices(devices, active, |device| *device, |app| app.0);
+
+        assert_eq!(
+            merged,
+            vec![(1, Some((1, "gpu1"))), (2, None), (3, Some((3, "gpu3"))),]
+        );
+    }
+
+    #[test]
+    fn sleeping_gpu_is_initialized_only_after_it_wakes() {
+        let mut app = None;
+        let mut initialization_count = 0;
+
+        assert!(!activate_if_awake(&mut app, false, || {
+            initialization_count += 1;
+            Some("active")
+        }));
+        assert_eq!(app, None);
+        assert_eq!(initialization_count, 0);
+
+        assert!(activate_if_awake(&mut app, true, || {
+            initialization_count += 1;
+            Some("active")
+        }));
+        assert_eq!(app, Some("active"));
+        assert_eq!(initialization_count, 1);
+
+        assert!(!activate_if_awake(&mut app, true, || {
+            initialization_count += 1;
+            Some("replacement")
+        }));
+        assert_eq!(app, Some("active"));
+        assert_eq!(initialization_count, 1);
+    }
+
+    #[test]
+    fn awake_gpu_initialization_can_be_retried_after_a_failure() {
+        let mut app = None;
+
+        assert!(!activate_if_awake(&mut app, true, || None::<&str>));
+        assert_eq!(app, None);
+        assert!(activate_if_awake(&mut app, true, || Some("active")));
+        assert_eq!(app, Some("active"));
+    }
 
     #[test]
     fn memory_info_selects_gtt_for_apus_and_vram_for_discrete_gpus() {

@@ -70,8 +70,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
 
     // libamdgpu_top exposes CPU sensors only through an APU device.
     let cpu_sensors = app
-        .apps
-        .iter()
+        .active_apps()
         .find(|app| app.device_info.is_apu)
         .and_then(|app| app.stat.sensors.as_ref());
     let tctl = cpu_sensors.and_then(|sensors| sensors.tctl);

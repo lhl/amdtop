@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep runtime-suspended GPUs visible as sleeping, preserve their PCI-order
+  indices, and initialize telemetry in place when another workload wakes them.
 - Allow for delayed AUR package-page/RPC indexing after a successful packaging
   push, avoiding false publication failures during normal index convergence.
 

@@ -68,11 +68,10 @@ fn section_height(app: &App, s: Section) -> Constraint {
             let (_, rows) = cpu::grid_dimensions(app.cpu.per_core_percent.len().max(1));
             4 + rows as u16
         }
-        Section::Gpu => (6 * app.apps.len() as u16).max(1),
+        Section::Gpu => (6 * app.gpus.len() as u16).max(1),
         Section::Npu => {
             let ctx = app
-                .apps
-                .iter()
+                .active_apps()
                 .map(|a| a.stat.xdna_fdinfo.proc_usage.len())
                 .sum::<usize>();
             5 + ctx.min(6) as u16
@@ -131,8 +130,8 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
         Span::styled(
             format!(
                 " {} device{} ",
-                app.apps.len(),
-                if app.apps.len() == 1 { "" } else { "s" }
+                app.gpus.len(),
+                if app.gpus.len() == 1 { "" } else { "s" }
             ),
             Style::default().fg(app.theme.graph_text()),
         ),

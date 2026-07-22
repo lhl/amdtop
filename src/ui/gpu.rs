@@ -5,7 +5,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use crate::app::{App, Section, gpu_mem_info};
+use crate::app::{App, GpuDevice, Section, gpu_mem_info};
 use crate::gauge::{self, Kind};
 use crate::theme::{SectionBox, UtilKind};
 
@@ -20,7 +20,22 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
 
     if app.is_collapsed(Section::Gpu) {
         let mut spans: Vec<Span> = Vec::new();
-        for (i, a) in app.apps.iter().enumerate() {
+        for (i, gpu) in app.gpus.iter().enumerate() {
+            if gpu.is_sleeping() {
+                spans.push(Span::styled(
+                    format!(" GPU{i}  sleeping  "),
+                    Style::default().fg(app.theme.inactive_fg()),
+                ));
+                continue;
+            }
+            let Some(a) = gpu.app.as_ref() else {
+                spans.push(Span::styled(
+                    format!(" GPU{i}  telemetry unavailable  "),
+                    Style::default().fg(app.theme.inactive_fg()),
+                ));
+                continue;
+            };
+
             let gfx = a.stat.activity.gfx.unwrap_or(0);
             let memory = gpu_mem_info(a);
             spans.push(Span::styled(
@@ -40,11 +55,20 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     // each GPU = 6-row band
     let bands = Layout::default()
         .direction(Direction::Vertical)
-        .constraints((0..app.apps.len()).map(|_| Constraint::Length(6)))
+        .constraints((0..app.gpus.len()).map(|_| Constraint::Length(6)))
         .split(inner);
 
-    for (i, a) in app.apps.iter().enumerate() {
+    for (i, gpu) in app.gpus.iter().enumerate() {
         let band = bands[i];
+        if gpu.is_sleeping() {
+            draw_unavailable_gpu(f, band, app, i, gpu);
+            continue;
+        }
+        let Some(a) = gpu.app.as_ref() else {
+            draw_unavailable_gpu(f, band, app, i, gpu);
+            continue;
+        };
+
         // left: identity+stats (38), right: gauges+history
         let cols = Layout::default()
             .direction(Direction::Horizontal)
@@ -57,7 +81,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             .split(cols[0]);
 
         // line 0: GPU index + name
-        let name = &a.device_path.device_name;
+        let name = &gpu.device_path.device_name;
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(
@@ -170,12 +194,14 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         render_graph(
             f,
             gcols[0],
-            app.hist_gpu[i].braille_graph(gcols[0].width as usize, 3, app.theme.gpu()),
+            gpu.hist_gpu
+                .braille_graph(gcols[0].width as usize, 3, app.theme.gpu()),
         );
         render_graph(
             f,
             gcols[1],
-            app.hist_mem[i].braille_graph(gcols[1].width as usize, 3, app.theme.used()),
+            gpu.hist_mem
+                .braille_graph(gcols[1].width as usize, 3, app.theme.used()),
         );
 
         // labels below each graph
@@ -198,6 +224,96 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             ))),
             lcols[1],
         );
+    }
+}
+
+fn draw_unavailable_gpu(f: &mut Frame, band: Rect, app: &App, index: usize, gpu: &GpuDevice) {
+    let sleeping = gpu.is_sleeping();
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(38), Constraint::Min(20)])
+        .split(band);
+    let left = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1); 5])
+        .split(cols[0]);
+
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                format!(" GPU{index} "),
+                Style::default()
+                    .fg(app.theme.hi_fg())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                short_name(&gpu.device_path.device_name),
+                Style::default().fg(app.theme.title()),
+            ),
+        ])),
+        left[0],
+    );
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            format!(" {}", gpu.device_path.pci),
+            Style::default().fg(app.theme.graph_text()),
+        ))),
+        left[1],
+    );
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            format!(" {}", unavailable_status(sleeping)),
+            Style::default().fg(app.theme.inactive_fg()),
+        ))),
+        left[2],
+    );
+
+    let right = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+        ])
+        .split(cols[1]);
+    let width = cols[1].width as usize;
+    f.render_widget(
+        Paragraph::new(render_bar(
+            app,
+            gauge::Bar::new("GPU", None, width, Kind::Gpu).with_value("", GPU_VALUE_WIDTH),
+        )),
+        right[0],
+    );
+    f.render_widget(
+        Paragraph::new(render_bar(
+            app,
+            gauge::Bar::new("MEM", None, width, Kind::Mem).with_value("— / —", GPU_VALUE_WIDTH),
+        )),
+        right[1],
+    );
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            unavailable_detail(sleeping),
+            Style::default().fg(app.theme.inactive_fg()),
+        ))),
+        right[2],
+    );
+}
+
+fn unavailable_status(is_sleeping: bool) -> &'static str {
+    if is_sleeping {
+        "sleeping"
+    } else {
+        "telemetry unavailable"
+    }
+}
+
+fn unavailable_detail(is_sleeping: bool) -> &'static str {
+    if is_sleeping {
+        "telemetry resumes when the device wakes"
+    } else {
+        "telemetry initialization failed; retrying"
     }
 }
 
@@ -329,7 +445,7 @@ fn short_name(s: &str) -> String {
 mod tests {
     use super::{
         effective_power_cap, fmt_bandwidth_rate, fmt_bytes, memory_bandwidth_text, power_text,
-        short_name,
+        short_name, unavailable_detail, unavailable_status,
     };
 
     #[test]
@@ -381,6 +497,20 @@ mod tests {
         assert_eq!(effective_power_cap(0, 0), None);
         assert_eq!(power_text(Some(9), Some(303)), "9/303W");
         assert_eq!(power_text(None, Some(303)), "  -");
+    }
+
+    #[test]
+    fn unavailable_gpu_status_distinguishes_sleep_from_initialization_failure() {
+        assert_eq!(unavailable_status(true), "sleeping");
+        assert_eq!(unavailable_status(false), "telemetry unavailable");
+        assert_eq!(
+            unavailable_detail(true),
+            "telemetry resumes when the device wakes"
+        );
+        assert_eq!(
+            unavailable_detail(false),
+            "telemetry initialization failed; retrying"
+        );
     }
 
     #[test]

@@ -173,11 +173,16 @@ If `XDG_CONFIG_HOME` is unset, it uses `~/.config/amdtop/state.json`.
 
 ### GPU power management
 
-amdtop keeps discrete-GPU device handles open while monitoring. This avoids
-stale utilization and sensor readings after a GPU enters a low-power state or
-the system resumes from sleep. To allow runtime D3Hot power management while
-amdtop is running, set `AGT_NO_DROP=0`; doing so may make telemetry unavailable
-until amdtop is restarted.
+A GPU that is already runtime-suspended when amdtop starts remains listed as
+`sleeping`; amdtop does not wake it merely to collect telemetry. When another
+workload wakes the GPU, amdtop initializes its telemetry in place without
+changing the GPU's index.
+
+For GPUs that are awake when monitoring begins, amdtop keeps discrete-GPU
+device handles open. This avoids stale utilization and sensor readings after a
+low-power transition or system resume. To allow runtime D3Hot power management
+while amdtop is running, set `AGT_NO_DROP=0`; doing so may make telemetry
+unavailable until amdtop is restarted.
 
 ### Gauge block styles
 

@@ -16,8 +16,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
 
     if app.is_collapsed(Section::Processes) {
         let n: usize = app
-            .apps
-            .iter()
+            .active_apps()
             .map(|a| a.stat.fdinfo.proc_usage.len())
             .sum();
         f.render_widget(
@@ -39,9 +38,10 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             .add_modifier(Modifier::BOLD),
     );
     let rows: Vec<Row> = app
-        .apps
+        .gpus
         .iter()
         .enumerate()
+        .filter_map(|(gi, gpu)| gpu.app.as_ref().map(|gpu_app| (gi, gpu_app)))
         .flat_map(|(gi, a)| {
             a.stat.fdinfo.proc_usage.iter().map(move |pu| {
                 let gpu_activity = [pu.usage.gfx, pu.usage.compute, pu.usage.dma]
