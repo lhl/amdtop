@@ -60,12 +60,13 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
 
     for (i, gpu) in app.gpus.iter().enumerate() {
         let band = bands[i];
-        if gpu.is_sleeping() {
-            draw_unavailable_gpu(f, band, app, i, gpu);
+        let sleeping = gpu.is_sleeping();
+        if sleeping {
+            draw_unavailable_gpu(f, band, app, i, gpu, true);
             continue;
         }
         let Some(a) = gpu.app.as_ref() else {
-            draw_unavailable_gpu(f, band, app, i, gpu);
+            draw_unavailable_gpu(f, band, app, i, gpu, false);
             continue;
         };
 
@@ -102,7 +103,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             .and_then(|sensors| sensors.max_dpm_link)
             .map(|link| (link.r#gen, link.width));
         let mut device_line = vec![Span::styled(
-            format!(" {} ", bus_id(a)),
+            format!(" {} ", gpu.device_path.pci),
             Style::default().fg(app.theme.graph_text()),
         )];
         device_line.push(Span::styled(
@@ -242,8 +243,14 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     }
 }
 
-fn draw_unavailable_gpu(f: &mut Frame, band: Rect, app: &App, index: usize, gpu: &GpuDevice) {
-    let sleeping = gpu.is_sleeping();
+fn draw_unavailable_gpu(
+    f: &mut Frame,
+    band: Rect,
+    app: &App,
+    index: usize,
+    gpu: &GpuDevice,
+    sleeping: bool,
+) {
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(38), Constraint::Min(20)])
@@ -460,10 +467,6 @@ fn fmt_bandwidth_rate(mb_per_second: u16) -> String {
 
 fn pcie_link_text(link: Option<(u8, u8)>) -> Option<String> {
     link.map(|(generation, width)| format!("PCIe{generation}.0×{width}"))
-}
-
-fn bus_id(app: &libamdgpu_top::app::AppAmdgpuTop) -> String {
-    app.device_path.pci.to_string()
 }
 
 fn render_graph(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
