@@ -85,6 +85,12 @@ or an installed DKMS package alone is not sufficient. XDNA driver trees also
 currently emit more than one engine-key name, and released telemetry parsers do
 not recognize all of them.
 
+> **Temporary Arch/AUR caveat (checked 2026-07-22):** the examined
+> `amdxdna-dkms` package's kernel allowlist permits only Linux 6.17, 6.18, and
+> 6.19. On other kernel versions, installing the package may leave its source in
+> `/usr/src` without building or loading a DKMS module. Check `dkms status` and
+> the loaded module rather than treating package installation as success.
+
 See the [XDNA NPU telemetry and workload guide](docs/NPU.md) for direct fdinfo
 checks, the current driver/parser compatibility matrix, matched XRT/driver build
 instructions, Arch package caveats, memlock setup, validation workloads, and
