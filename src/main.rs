@@ -1,7 +1,7 @@
 use std::io;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -164,6 +164,11 @@ impl Drop for TerminalSession {
     }
 }
 
+fn is_quit_key(key: &KeyEvent) -> bool {
+    matches!(key.code, KeyCode::Char('q') | KeyCode::Esc)
+        || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
+}
+
 fn run(terminal: &mut Tui, app: &mut App) -> io::Result<()> {
     let mut sample_clock = SampleClock::new(Instant::now());
     app.sample(TICK);
@@ -175,11 +180,12 @@ fn run(terminal: &mut Tui, app: &mut App) -> io::Result<()> {
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
+            if is_quit_key(&key) {
+                app.save_state()?;
+                return Ok(());
+            }
+
             match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => {
-                    app.save_state()?;
-                    return Ok(());
-                }
                 KeyCode::Tab => app.next_section(),
                 KeyCode::BackTab => app.prev_section(),
                 KeyCode::Char(' ') | KeyCode::Enter => app.toggle_collapse()?,
@@ -202,13 +208,26 @@ fn run(terminal: &mut Tui, app: &mut App) -> io::Result<()> {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use super::{SampleClock, TICK, should_set_no_drop};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    use super::{SampleClock, TICK, is_quit_key, should_set_no_drop};
 
     #[test]
     fn backend_keeps_device_handles_unless_the_user_overrides_it() {
         assert!(should_set_no_drop(None));
         assert!(!should_set_no_drop(Some("0".as_ref())));
         assert!(!should_set_no_drop(Some("1".as_ref())));
+    }
+
+    #[test]
+    fn ctrl_c_is_a_quit_key() {
+        let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+
+        assert!(is_quit_key(&key));
+        assert!(!is_quit_key(&KeyEvent::new(
+            KeyCode::Char('c'),
+            KeyModifiers::NONE
+        )));
     }
 
     #[test]

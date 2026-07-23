@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Allow quitting with `Ctrl+C` in addition to `q` and `Esc`.
+
 ### Fixed
 
 - Keep runtime-suspended GPUs visible as sleeping, preserve their PCI-order

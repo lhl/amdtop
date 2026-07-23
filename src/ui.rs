@@ -178,7 +178,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         .bg(bg);
     let lbl = Style::default().fg(app.theme.main_fg()).bg(bg);
     let spans = vec![
-        Span::styled(" q ", key),
+        Span::styled(" q/ctrl-c ", key),
         Span::styled("quit  ", lbl),
         Span::styled("tab ", key),
         Span::styled("section  ", lbl),

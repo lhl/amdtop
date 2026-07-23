@@ -75,64 +75,20 @@ Distro packages for the `libdrm` build headers:
 
 ### NPU telemetry requirements
 
-`amdtop` detects AMD XDNA/Ryzen AI NPUs through the Linux accel
-class (`/sys/class/accel` and `/dev/accel/accel*`). On systems like Strix Halo,
-that is enough for the NPU pane to show the device name, firmware, and BDF.
+`amdtop` detects AMD XDNA/Ryzen AI NPUs through the Linux accel class
+(`/sys/class/accel` and `/dev/accel/accel*`). Device detection is enough to show
+identity and firmware information, but not live utilization.
 
-Live NPU utilization and the per-process/context table require extra telemetry
-from the `amdxdna` kernel driver via DRM fdinfo. If your driver exposes fdinfo,
-opening `/dev/accel/accel0` should show `drm-*` fields such as
-`drm-driver`, `drm-pdev`, and `drm-engine-npu-amdxdna`:
+Utilization and per-context monitoring require a cumulative `drm-engine-*`
+busy-time counter from the loaded `amdxdna` kernel module. A `drm-driver` line
+or an installed DKMS package alone is not sufficient. XDNA driver trees also
+currently emit more than one engine-key name, and released telemetry parsers do
+not recognize all of them.
 
-```sh
-python3 - <<'PY'
-import os
-fd = os.open('/dev/accel/accel0', os.O_RDWR)
-print(open(f'/proc/self/fdinfo/{fd}').read())
-PY
-```
-
-Expected fdinfo-capable output includes lines similar to:
-
-```text
-drm-driver: amdxdna_accel_driver
-drm-pdev: 0000:c4:00.1
-drm-engine-npu-amdxdna: 0 ns
-drm-total-memory: 0 KiB
-```
-
-If those `drm-*` lines are missing, the app still shows the NPU pane, but the
-utilization gauge is `N/A` and the pane reports `amdxdna fdinfo telemetry
-unavailable`. This means the NPU is present, but the loaded kernel module does
-not provide the standard fdinfo counters that this TUI reads.
-
-#### Arch / AUR notes
-
-Recent Arch kernels include the in-tree `amdxdna` driver, but not every kernel
-build has the fdinfo patches needed for monitoring. For Strix Halo testing, the
-most relevant AUR package is:
-
-```sh
-yay -S amdxdna-dkms
-```
-
-`amdxdna-dkms` provides a newer DKMS `amdxdna` module and firmware, and its
-upstream lists Strix Halo (`17f0:11`) support. Make sure the matching kernel
-headers for your booted kernel are installed (`linux-headers`,
-`linux-mainline-headers`, etc.). Reboot after installing, then run the fdinfo
-check above.
-
-Arch also packages the XRT userspace plugin:
-
-```sh
-sudo pacman -S xrt-plugin-amdxdna
-```
-
-That package is useful for XRT workloads and tools such as `xrt-smi`, but it is
-not a replacement for an fdinfo-capable kernel module. The older AUR
-`amdxdna-driver-bin` / `xrt-npu-git` packages exist, but appear to target older
-XDNA stacks; prefer `amdxdna-dkms` for the kernel driver unless you specifically
-need to test that older stack.
+See the [XDNA NPU telemetry and workload guide](docs/NPU.md) for direct fdinfo
+checks, the current driver/parser compatibility matrix, matched XRT/driver build
+instructions, Arch package caveats, memlock setup, validation workloads, and
+troubleshooting.
 
 ## Usage
 
@@ -152,7 +108,7 @@ system-wide numbering. Use the displayed PCI BDF as the authoritative mapping.
 
 | Key | Action |
 |---|---|
-| `q` / `Esc` | quit |
+| `q` / `Esc` / `Ctrl+C` | quit |
 | `Tab` / `Shift+Tab` | move between sections |
 | `Space` / `Enter` | collapse / expand the focused section |
 | `t` / `T` | next / previous theme |
