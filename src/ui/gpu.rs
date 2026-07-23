@@ -94,7 +94,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             ])),
             left[0],
         );
-        // line 1: bus-id + maximum PCIe link + type
+        // line 1: bus-id + type + maximum PCIe link
         let max_pcie_link = a
             .stat
             .sensors
@@ -105,16 +105,16 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             format!(" {} ", bus_id(a)),
             Style::default().fg(app.theme.graph_text()),
         )];
-        if let Some(link) = pcie_link_text(max_pcie_link) {
-            device_line.push(Span::styled(
-                format!("{link} "),
-                Style::default().fg(app.theme.graph_text()),
-            ));
-        }
         device_line.push(Span::styled(
             if a.device_info.is_apu { "APU" } else { "dGPU" },
             Style::default().fg(app.theme.proc_misc()),
         ));
+        if let Some(link) = pcie_link_text(max_pcie_link) {
+            device_line.push(Span::styled(
+                format!(" {link}"),
+                Style::default().fg(app.theme.graph_text()),
+            ));
+        }
         f.render_widget(Paragraph::new(Line::from(device_line)), left[1]);
         // line 2: temp + power
         let (temp_s, pwr_s) = gpu_temp_power(a);
@@ -422,7 +422,7 @@ fn fmt_bandwidth_rate(mb_per_second: u16) -> String {
 }
 
 fn pcie_link_text(link: Option<(u8, u8)>) -> Option<String> {
-    link.map(|(generation, width)| format!("({generation}.0×{width})"))
+    link.map(|(generation, width)| format!("PCIe{generation}.0×{width}"))
 }
 
 fn bus_id(app: &libamdgpu_top::app::AppAmdgpuTop) -> String {
@@ -462,7 +462,7 @@ mod tests {
 
     #[test]
     fn maximum_pcie_link_uses_compact_identity_text() {
-        assert_eq!(pcie_link_text(Some((4, 16))), Some("(4.0×16)".into()));
+        assert_eq!(pcie_link_text(Some((4, 16))), Some("PCIe4.0×16".into()));
         assert_eq!(pcie_link_text(None), None);
     }
 
