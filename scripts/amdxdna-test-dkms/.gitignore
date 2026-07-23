@@ -1,0 +1,6 @@
+/pkg/
+/src/
+/*.pkg.tar.*
+/xdna-driver-*.tar.gz
+/xrt_smi_strx.a
+/1.7_npu.sbin.1.1.2.65

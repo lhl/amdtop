@@ -353,6 +353,96 @@ Use the legacy route only as a compatibility bridge. For the long-term default
 staging route, update `libamdgpu_top` to recognize
 `drm-engine-amdxdna_accel_driver`.
 
+#### Reproducible amdtop Arch test package
+
+This repository includes the exact temporary package recipe used for amdtop's
+Strix Halo test host:
+
+- [`scripts/build-amdxdna-test-dkms.sh`](../scripts/build-amdxdna-test-dkms.sh)
+  downloads, verifies, and builds the package;
+- [`scripts/amdxdna-test-dkms/PKGBUILD`](../scripts/amdxdna-test-dkms/PKGBUILD)
+  contains the pinned Arch recipe; and
+- [`scripts/test-amdxdna-npu.sh`](../scripts/test-amdxdna-npu.sh) verifies the
+  installed and loaded module, memlock, firmware, validation data, fdinfo, XRT,
+  and a real GEMM workload.
+
+The package pins:
+
+- AMD `xdna-driver` commit `1e1276c` and packages its legacy/OOT driver so the
+  fdinfo key is compatible with `libamdgpu_top` 0.11.5;
+- Strix Halo firmware `1.1.2.65`, including the `npu.dev.sbin` name expected by
+  that driver; and
+- the Strix validation archive from Xilinx/VTD commit `c79b5d2`, which AMD's
+  `xdna-driver` 2.21.75 tag pins for XRT 2.21.75.
+
+It also installs the PAM memlock drop-in and registers the source with DKMS.
+This is a narrow, temporary test package, not a general distribution package:
+it targets PCI ID `17f0`, revision `11`, the stated XRT/plugin version, and the
+released parser's legacy engine key.
+
+Build it from the amdtop checkout:
+
+```sh
+scripts/test_amdxdna_scripts.sh
+scripts/build-amdxdna-test-dkms.sh
+```
+
+The build script prints the exact package path. Inspect that package before
+installation. Remove the incompatible AUR package if it is installed, then
+install the newly built package:
+
+```sh
+pacman -Qip scripts/amdxdna-test-dkms/amdxdna-amdtop-dkms-*.pkg.tar.zst
+sudo pacman -R amdxdna-dkms            # only if installed
+sudo pacman -U scripts/amdxdna-test-dkms/amdxdna-amdtop-dkms-*.pkg.tar.zst
+```
+
+The broad globs above are constrained to the dedicated package directory, but
+still inspect the expanded paths before running the privileged commands. The
+package's `configure_kernel.sh` feature-probes each target kernel during DKMS
+`PRE_BUILD`; matching headers are mandatory.
+
+When installing a new kernel, install its kernel and headers in the same pacman
+transaction. Arch's DKMS hook should rebuild the module automatically. Before
+rebooting, replace `<release>` with the new directory name under
+`/usr/lib/modules` and verify both registration and module selection:
+
+```sh
+dkms status | grep "amdxdna.*<release>"
+modinfo -k <release> -n amdxdna
+```
+
+The selected path must end in `updates/dkms/amdxdna.ko.zst`. If the DKMS entry
+is absent, do not reboot into that kernel until the build log is understood;
+`sudo dkms autoinstall -k <release>` can retry it after fixing missing headers
+or source compatibility.
+
+After reboot or a fresh login, run the automated hardware check as the desktop
+user, not root:
+
+```sh
+scripts/test-amdxdna-npu.sh
+```
+
+For a longer observable workload, ask the script for a finite command or use an
+open-ended loop:
+
+```sh
+scripts/test-amdxdna-npu.sh --print-workload --runs 100
+while xrt-smi validate --run gemm --batch; do :; done
+```
+
+On the 2026-07-23 test host, the package built for
+`7.1.4-1-cachyos`, `7.1.4-arch1-1`, and `7.2.0-rc1-1-mainline`. A subsequent
+kernel-and-headers upgrade automatically rebuilt and selected the same DKMS
+source for `7.2.0-rc4-1-mainline`, with no manual `dkms` command required. A
+live reload on rc1 selected `updates/dkms/amdxdna.ko.zst` with source version
+`2BDE8A5031628D336348E6C`. The fdinfo counter
+`drm-engine-npu-amdxdna` increased from `166595601 ns` to `664202145 ns` during
+GEMM, `xrt-smi validate --run gemm` passed at 51 TOPS, and amdtop's hardware
+smoke test found one active XDNA fdinfo process. The out-of-tree module was
+unsigned and tainted the kernel; Secure Boot was disabled on that test host.
+
 ### Ubuntu/Debian
 
 AMD's documented matched-build flow is:

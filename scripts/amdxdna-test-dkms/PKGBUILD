@@ -1,0 +1,65 @@
+# Temporary amdtop NPU telemetry test package.
+# Driver: amd/xdna-driver legacy/OOT tree (exports drm-engine-npu-amdxdna).
+# Validation archive: the VTD revision pinned by xdna-driver 2.21.75.
+
+pkgname=amdxdna-amdtop-dkms
+pkgver=2.25.0.r20260723.g1e1276c
+pkgrel=1
+pkgdesc='AMD XDNA legacy DKMS driver with fdinfo busy-time telemetry for amdtop testing'
+arch=('x86_64')
+url='https://github.com/amd/xdna-driver'
+license=('GPL-2.0-only AND Apache-2.0 AND LicenseRef-AMD-Proprietary')
+depends=('dkms' 'linux-headers' 'xrt>=2.21.75' 'xrt-plugin-amdxdna>=2.21.75')
+provides=('amdxdna')
+conflicts=('amdxdna-dkms' 'amdxdna-driver')
+options=('!debug' '!strip')
+
+_driver_commit=1e1276c96e4cbf6ad2154acb5e1a42cdbb2f75a1
+_vtd_commit=c79b5d21568a4ffa5b0612a8279b352fc4e1109a
+_firmware_commit=0314d8a1b6c833046b81826328d893adc7a8d27b
+
+source=(
+  "xdna-driver-${_driver_commit}.tar.gz::https://codeload.github.com/amd/xdna-driver/tar.gz/${_driver_commit}"
+  "xrt_smi_strx.a::https://raw.githubusercontent.com/Xilinx/VTD/${_vtd_commit}/archive/strx/xrt_smi_strx.a"
+  "1.7_npu.sbin.1.1.2.65::https://gitlab.com/kernel-firmware/drm-firmware/-/raw/${_firmware_commit}/amdnpu/17f0_11/1.7_npu.sbin.1.1.2.65"
+  'dkms.conf'
+  '99-amdxdna.conf'
+  'amdxdna.modules-load.conf'
+)
+noextract=('xrt_smi_strx.a' '1.7_npu.sbin.1.1.2.65')
+sha256sums=(
+  'ecccbff6271630bbdea3fd97495d7e0e0dba82f2c41227ac87421ca85ee6226a'
+  '57384f0d5cf3fc604b00540ed9b7542826cd961c30a2f3207357c972cc3ef32c'
+  '3e3c996ef1e562e96ee4c4d90faa9faf1132c72da3af1bcf35d592cc34903fed'
+  'd4758e5dba7b29a0f0ed1e8842f553ef8048cf9734b5b12fea92cc605588b5e7'
+  '5d6bbabd8749d562f87c3ee7e823d9d8be5fa541ce4d8110596e14a4223b9d82'
+  '49e3be4a2c5fffb43a4f93ed2211eeef60ca650b27a001efb3fa950b09a282e1'
+)
+
+package() {
+  local source_root="${srcdir}/xdna-driver-${_driver_commit}"
+  local dkms_root="${pkgdir}/usr/src/amdxdna-${pkgver}"
+
+  install -d "${dkms_root}/driver"
+  cp -a "${source_root}/src/driver/amdxdna" "${dkms_root}/driver/"
+  cp -a "${source_root}/src/include" "${dkms_root}/"
+  install -Dm755 "${source_root}/src/driver/tools/configure_kernel.sh" \
+    "${dkms_root}/configure_kernel.sh"
+  install -Dm644 "${srcdir}/dkms.conf" "${dkms_root}/dkms.conf"
+
+  install -Dm644 "${srcdir}/amdxdna.modules-load.conf" \
+    "${pkgdir}/etc/modules-load.d/amdxdna.conf"
+  install -Dm644 "${srcdir}/99-amdxdna.conf" \
+    "${pkgdir}/etc/security/limits.d/99-amdxdna.conf"
+
+  install -Dm644 "${srcdir}/xrt_smi_strx.a" \
+    "${pkgdir}/usr/share/xrt/amdxdna/bins/xrt_smi_strx.a"
+
+  install -Dm644 "${srcdir}/1.7_npu.sbin.1.1.2.65" \
+    "${pkgdir}/usr/lib/firmware/amdnpu/17f0_11/1.7_npu.sbin.1.1.2.65"
+  ln -s '1.7_npu.sbin.1.1.2.65' \
+    "${pkgdir}/usr/lib/firmware/amdnpu/17f0_11/npu.dev.sbin"
+
+  install -Dm644 "${source_root}/LICENSE.amdnpu" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE.amdnpu"
+}
