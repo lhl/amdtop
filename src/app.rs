@@ -143,7 +143,7 @@ impl App {
         } = discover_devices();
         let previous_gpus = std::mem::take(&mut self.gpus);
 
-        self.gpus = pair_refreshed_devices(
+        self.gpus = pair_by_key(
             gpus,
             previous_gpus,
             |gpu| {
@@ -214,12 +214,16 @@ impl App {
     }
 
     pub fn sample(&mut self, interval: Duration) {
+        let mut device_activated = false;
         for gpu in &mut self.gpus {
-            gpu.try_activate();
+            device_activated |= gpu.try_activate();
             if let Some(app) = gpu.app.as_mut() {
                 app.update(interval);
             }
         }
+        send_process_targets_after_activation(&self.process_index_sender, device_activated, || {
+            process_device_paths(&self.gpus)
+        });
         self.sample_process_memory();
         self.cpu.tick();
         self.mem.tick();
@@ -346,8 +350,8 @@ fn discover_devices() -> DiscoveredDevices {
         })
         .collect();
     let npu_info = detect_npu(&active_apps);
-    let gpus = merge_devices(
-        device_paths.clone(),
+    let gpus = pair_by_key(
+        device_paths,
         active_apps,
         |device_path| device_path.pci,
         |app| app.device_path.pci,
@@ -356,14 +360,7 @@ fn discover_devices() -> DiscoveredDevices {
     .map(|(device_path, app)| GpuDevice::new(device_path, app))
     .collect::<Vec<_>>();
 
-    let mut process_device_paths = device_paths;
-    if let Some(xdna_device_path) = gpus
-        .iter()
-        .filter_map(|gpu| gpu.app.as_ref())
-        .find_map(|app| app.xdna_device_path.as_ref())
-    {
-        process_device_paths.push(xdna_device_path.clone());
-    }
+    let process_device_paths = process_device_paths(&gpus);
 
     DiscoveredDevices {
         gpus,
@@ -372,9 +369,29 @@ fn discover_devices() -> DiscoveredDevices {
     }
 }
 
-// Keep one process-index worker for the application's lifetime, but let a
-// manual device refresh replace its targets. This avoids leaking a permanent
-// backend worker each time the hidden refresh action is used.
+fn process_device_paths(gpus: &[GpuDevice]) -> Vec<DevicePath> {
+    let mut device_paths = Vec::with_capacity(gpus.len() * 2);
+    device_paths.extend(gpus.iter().map(|gpu| gpu.device_path.clone()));
+    device_paths.extend(
+        gpus.iter()
+            .filter_map(|gpu| gpu.app.as_ref()?.xdna_device_path.clone()),
+    );
+    device_paths
+}
+
+fn send_process_targets_after_activation<T>(
+    sender: &Sender<T>,
+    device_activated: bool,
+    targets: impl FnOnce() -> T,
+) {
+    if device_activated {
+        let _ = sender.send(targets());
+    }
+}
+
+// Keep one process-index worker for the application's lifetime, but let device
+// activation or manual refresh replace its targets. This avoids leaking a
+// permanent backend worker whenever the target set changes.
 fn spawn_process_index_thread(initial_device_paths: Vec<DevicePath>) -> Sender<Vec<DevicePath>> {
     let (sender, receiver) = mpsc::channel();
 
@@ -417,32 +434,22 @@ fn spawn_process_index_thread(initial_device_paths: Vec<DevicePath>) -> Sender<V
     sender
 }
 
-fn merge_devices<D, A, K: PartialEq>(
-    devices: Vec<D>,
-    mut active_apps: Vec<A>,
-    device_key: impl Fn(&D) -> K,
-    app_key: impl Fn(&A) -> K,
-) -> Vec<(D, Option<A>)> {
-    devices
-        .into_iter()
-        .map(|device| {
-            let key = device_key(&device);
-            let app = active_apps
+fn pair_by_key<L, R, K: PartialEq>(
+    left: Vec<L>,
+    mut right: Vec<R>,
+    left_key: impl Fn(&L) -> K,
+    right_key: impl Fn(&R) -> K,
+) -> Vec<(L, Option<R>)> {
+    left.into_iter()
+        .map(|left_item| {
+            let key = left_key(&left_item);
+            let right_item = right
                 .iter()
-                .position(|app| app_key(app) == key)
-                .map(|position| active_apps.remove(position));
-            (device, app)
+                .position(|right_item| right_key(right_item) == key)
+                .map(|position| right.remove(position));
+            (left_item, right_item)
         })
         .collect()
-}
-
-fn pair_refreshed_devices<D, P, K: PartialEq>(
-    discovered: Vec<D>,
-    previous: Vec<P>,
-    discovered_key: impl Fn(&D) -> K,
-    previous_key: impl Fn(&P) -> K,
-) -> Vec<(D, Option<P>)> {
-    merge_devices(discovered, previous, discovered_key, previous_key)
 }
 
 fn same_npu_device(previous: Option<&NpuInfo>, refreshed: Option<&NpuInfo>) -> bool {
@@ -610,9 +617,11 @@ fn memory_info(is_apu: bool, vram: (u64, u64), gtt: (u64, u64)) -> MemInfo {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc::{self, TryRecvError};
+
     use super::{
-        NpuInfo, activate_if_awake, memory_info, merge_devices, pair_refreshed_devices,
-        parse_process_rss_kb, same_npu_device,
+        NpuInfo, activate_if_awake, memory_info, pair_by_key, parse_process_rss_kb,
+        same_npu_device, send_process_targets_after_activation,
     };
 
     #[test]
@@ -620,7 +629,7 @@ mod tests {
         let devices = vec![1, 2, 3];
         let active = vec![(3, "gpu3"), (1, "gpu1")];
 
-        let merged = merge_devices(devices, active, |device| *device, |app| app.0);
+        let merged = pair_by_key(devices, active, |device| *device, |app| app.0);
 
         assert_eq!(
             merged,
@@ -638,7 +647,7 @@ mod tests {
             (5, 50, 1, "removed"),
         ];
 
-        let paired = pair_refreshed_devices(
+        let paired = pair_by_key(
             discovered,
             previous,
             |device| (device.0, device.1, device.2),
@@ -718,6 +727,26 @@ mod tests {
         assert_eq!(app, None);
         assert!(activate_if_awake(&mut app, true, || Some("active")));
         assert_eq!(app, Some("active"));
+    }
+
+    #[test]
+    fn device_activation_replaces_process_index_targets() {
+        let (sender, receiver) = mpsc::channel();
+        let mut collected_targets = false;
+
+        send_process_targets_after_activation(&sender, false, || {
+            collected_targets = true;
+            vec![1, 2]
+        });
+        assert!(!collected_targets);
+        assert_eq!(receiver.try_recv(), Err(TryRecvError::Empty));
+
+        send_process_targets_after_activation(&sender, true, || {
+            collected_targets = true;
+            vec![1, 2]
+        });
+        assert!(collected_targets);
+        assert_eq!(receiver.recv().unwrap(), vec![1, 2]);
     }
 
     #[test]
