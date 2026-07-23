@@ -315,8 +315,9 @@ The script:
    either `publish amdtop X.Y.Z-1` is typed exactly or `--publish` was supplied;
    and
 8. waits up to ten minutes for the AUR RPC to report the expected
-   `X.Y.Z-N` version (override locally with `AUR_INDEX_ATTEMPTS` and
-   `AUR_INDEX_INTERVAL` only for troubleshooting).
+   `X.Y.Z-N` version, with bounded network requests (override locally with
+   `AUR_INDEX_TIMEOUT`, `AUR_INDEX_INTERVAL`, and `AUR_INDEX_REQUEST_TIMEOUT`
+   only for troubleshooting).
 
 - [ ] Review upstream dependency, license, asset, and build-system changes; do
       not treat a passing script as approval for an automatic version bump.

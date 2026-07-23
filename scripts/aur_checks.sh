@@ -25,36 +25,60 @@ aur_check_srcinfo() {
   fi
 }
 
+aur_now_seconds() {
+  printf '%s\n' "$SECONDS"
+}
+
 # Wait for aurweb's public package index after the Git push has succeeded.
-# AUR_INDEXED_VERSION is retained for a precise timeout diagnostic.
+# AUR_INDEXED_VERSION is retained for a precise timeout diagnostic. Both the
+# overall polling window and every network request are bounded.
 aur_wait_for_index() {
   local expected_version=$1
-  local attempts=${2:-120}
+  local timeout=${2:-600}
   local interval=${3:-5}
-  local endpoint=${4:-'https://aur.archlinux.org/rpc/v5/info?arg[]=amdtop'}
-  local attempt indexed_version=''
+  local request_timeout=${4:-10}
+  local endpoint=${5:-'https://aur.archlinux.org/rpc/v5/info?arg[]=amdtop'}
+  local deadline now remaining curl_timeout indexed_version=''
 
-  [[ "$attempts" =~ ^[1-9][0-9]*$ ]] || {
-    printf 'AUR index attempts must be a positive integer\n' >&2
+  [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || {
+    printf 'AUR index timeout must be a positive integer\n' >&2
     return 1
   }
-  [[ "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
-    printf 'AUR index interval must be a non-negative number\n' >&2
+  [[ "$interval" =~ ^[1-9][0-9]*$ ]] || {
+    printf 'AUR index interval must be a positive integer\n' >&2
+    return 1
+  }
+  [[ "$request_timeout" =~ ^[1-9][0-9]*$ ]] || {
+    printf 'AUR index request timeout must be a positive integer\n' >&2
     return 1
   }
 
   AUR_INDEXED_VERSION=''
-  for ((attempt = 1; attempt <= attempts; attempt++)); do
+  deadline=$(($(aur_now_seconds) + timeout))
+  while :; do
+    now=$(aur_now_seconds)
+    ((now < deadline)) || return 1
+    remaining=$((deadline - now))
+    curl_timeout=$request_timeout
+    ((curl_timeout <= remaining)) || curl_timeout=$remaining
+
     if indexed_version="$(
-      curl --fail --silent --show-error --header 'Cache-Control: no-cache' "$endpoint" |
+      curl --fail --silent --show-error \
+        --connect-timeout "$curl_timeout" \
+        --max-time "$curl_timeout" \
+        --header 'Cache-Control: no-cache' \
+        "$endpoint" |
         jq -er '.results[0].Version'
     )"; then
       AUR_INDEXED_VERSION=$indexed_version
       [[ "$indexed_version" == "$expected_version" ]] && return 0
     fi
-    ((attempt < attempts)) && sleep "$interval"
+
+    now=$(aur_now_seconds)
+    remaining=$((deadline - now))
+    ((remaining > interval)) || return 1
+    sleep "$interval"
   done
-  return 1
 }
 
 # Verify that the built binary package redistributes upstream legal notices.

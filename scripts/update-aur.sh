@@ -260,10 +260,14 @@ note 'Updating the GitHub packaging mirror'
 git -C "$aur_dir" push github HEAD:master
 
 note "Waiting for the AUR to index amdtop $expected_version"
-aur_index_attempts=${AUR_INDEX_ATTEMPTS:-120}
+aur_index_timeout=${AUR_INDEX_TIMEOUT:-600}
 aur_index_interval=${AUR_INDEX_INTERVAL:-5}
+aur_index_request_timeout=${AUR_INDEX_REQUEST_TIMEOUT:-10}
 if ! aur_wait_for_index \
-  "$expected_version" "$aur_index_attempts" "$aur_index_interval"; then
+  "$expected_version" \
+  "$aur_index_timeout" \
+  "$aur_index_interval" \
+  "$aur_index_request_timeout"; then
   fail "AUR pushes completed, but the public index still reports '${AUR_INDEXED_VERSION:-unavailable}' instead of '$expected_version'; verify the AUR page before retrying publication"
 fi
 

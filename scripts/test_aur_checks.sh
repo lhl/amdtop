@@ -48,25 +48,79 @@ for missing in LICENSE NOTICE THIRD_PARTY.md; do
   mv "$tmp_dir/$missing" "$license_dir/$missing"
 done
 
+mock_now=0
+aur_now_seconds() {
+  printf '%s\n' "$mock_now"
+}
+
 mock_indexed_version=0.2.5-1
+mock_fail_until_sleep=0
+mock_request_timeout_limit=3
+curl_log="$tmp_dir/curl-log"
 curl() {
+  local connect_timeout=''
+  local max_time=''
+
+  while (( $# > 0 )); do
+    case "$1" in
+      --connect-timeout)
+        connect_timeout=$2
+        shift 2
+        ;;
+      --max-time)
+        max_time=$2
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  [[ "$connect_timeout" =~ ^[1-9][0-9]*$ ]] || return 97
+  [[ "$max_time" =~ ^[1-9][0-9]*$ ]] || return 97
+  ((connect_timeout <= mock_request_timeout_limit)) || return 97
+  ((max_time <= mock_request_timeout_limit)) || return 97
+  printf '%s %s\n' "$connect_timeout" "$max_time" >>"$curl_log"
+
+  ((sleep_count >= mock_fail_until_sleep)) || return 22
   printf '{"results":[{"Version":"%s"}]}\n' "$mock_indexed_version"
 }
 sleep_count=0
 sleep() {
   sleep_count=$((sleep_count + 1))
+  mock_now=$((mock_now + $1))
 }
+
 AUR_INDEXED_VERSION=''
-aur_wait_for_index 0.2.5-1 3 0
+aur_wait_for_index 0.2.5-1 10 2 3
 [[ "$AUR_INDEXED_VERSION" == 0.2.5-1 ]] || fail 'indexed version was not retained'
 [[ "$sleep_count" == 0 ]] || fail 'successful index check slept unexpectedly'
 
+: >"$curl_log"
+mock_now=0
+sleep_count=0
 mock_indexed_version=0.2.4-1
+mock_request_timeout_limit=2
 AUR_INDEXED_VERSION=''
-expect_failure aur_wait_for_index 0.2.5-1 3 0
+expect_failure aur_wait_for_index 0.2.5-1 3 1 2
 [[ "$AUR_INDEXED_VERSION" == 0.2.4-1 ]] || fail 'stale indexed version was not retained'
 [[ "$sleep_count" == 2 ]] || fail "expected two polling sleeps, got $sleep_count"
-expect_failure aur_wait_for_index 0.2.5-1 0 0
-expect_failure aur_wait_for_index 0.2.5-1 1 invalid
+[[ "$(wc -l <"$curl_log")" == 3 ]] || fail 'deadline did not bound polling attempts'
+
+: >"$curl_log"
+mock_now=0
+sleep_count=0
+mock_indexed_version=0.2.5-1
+mock_fail_until_sleep=1
+mock_request_timeout_limit=2
+AUR_INDEXED_VERSION=''
+aur_wait_for_index 0.2.5-1 10 1 2
+[[ "$AUR_INDEXED_VERSION" == 0.2.5-1 ]] || fail 'polling did not recover after a curl failure'
+[[ "$sleep_count" == 1 ]] || fail 'transient failure did not retry once'
+
+expect_failure aur_wait_for_index 0.2.5-1 0 1 1
+expect_failure aur_wait_for_index 0.2.5-1 1 0 1
+expect_failure aur_wait_for_index 0.2.5-1 1 1 invalid
 
 printf 'AUR release checks passed\n'
