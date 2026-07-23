@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-07-23
+
 ### Added
 
 - Allow quitting with `Ctrl+C` in addition to `q` and `Esc`.
@@ -154,7 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Collapsible sections, persistent UI state, btop theme support, and selectable
   gauge styles.
 
-[Unreleased]: https://github.com/lhl/amdtop/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/lhl/amdtop/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/lhl/amdtop/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/lhl/amdtop/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/lhl/amdtop/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/lhl/amdtop/compare/v0.2.2...v0.2.3
