@@ -6,7 +6,7 @@
 > Driver, firmware, XRT, and the XRT XDNA plugin should be treated as a matched
 > stack. Package names and kernel compatibility can change between releases.
 >
-> This guide records the state investigated on **2026-07-22**. Recheck the
+> This guide records the state investigated on **2026-07-23**. Recheck the
 > linked upstream sources before replacing a working driver.
 
 ## Quick answer
@@ -29,8 +29,8 @@ amdtop
 ```
 
 ```sh
-# Terminal 2
-xrt-smi validate --run gemm --loop 100
+# Terminal 2 (repeat until Ctrl-C)
+while xrt-smi validate --run gemm; do :; done
 ```
 
 The set of validation tests is device- and XRT-version-dependent. Check
@@ -495,19 +495,20 @@ xrt-smi validate
 
 ```sh
 xrt-smi validate --help
-xrt-smi validate --run gemm --loop 100
+while xrt-smi validate --run gemm; do :; done
 ```
 
 XRT's [`gemm` validation test][xrt-gemm-test] executes INT8 GEMM on supported
 NPU platforms. The validate command and available tests evolve, so use a
-listed compute-heavy test if `gemm` is absent. As a fallback for versions
-without `--loop`:
+listed compute-heavy test if `gemm` is absent. Some versions support a native
+loop option instead:
 
 ```sh
-while xrt-smi validate --run gemm; do :; done
+xrt-smi validate --run gemm --loop 100
 ```
 
-Stop the shell loop with `Ctrl-C`.
+Use only options shown by the installed version's help. Stop the shell loop
+with `Ctrl-C`.
 
 While it runs, inspect the workload's own accel fdinfo:
 
@@ -525,12 +526,35 @@ same user or with appropriate privileges.
 Finally, run `amdtop`. A compatible parser should show the `xrt-smi` context and
 non-zero utilization.
 
-## Arch/AUR status as of 2026-07-22
+## Arch/AUR status as of 2026-07-23
 
 Arch provides official [`xrt`][arch-xrt] and
 [`xrt-plugin-amdxdna`][arch-xrt-plugin] packages. These supply the userspace
 runtime and plugin; they do not guarantee that the booted kernel's `amdxdna`
 module has fdinfo busy-time accounting.
+
+Arch's `xrt-plugin-amdxdna` 2.21.75-2 build recipe also removes the packaged
+`bins` directory. This omits the VTD validation archive that `xrt-smi validate`
+needs. The resulting failure is:
+
+```text
+Error(s) : No archive provided, skipping test
+```
+
+For that exact plugin version, AMD's 2.21.75 source pins the Strix archive to
+Xilinx/VTD commit `c79b5d2`. The plugin searches for it at:
+
+```text
+/usr/share/xrt/amdxdna/bins/xrt_smi_strx.a
+```
+
+Prefer building/installing AMD's matched plugin package so the archive is
+package-managed. If repairing the distribution package locally, use the VTD
+revision pinned by the installed plugin's source rather than an arbitrary
+latest archive. The 2.21.75 Strix file has SHA-256
+`57384f0d5cf3fc604b00540ed9b7542826cd961c30a2f3207357c972cc3ef32c`.
+This validation-data issue is independent of the kernel driver and fdinfo
+counter.
 
 The AUR [`amdxdna-dkms`][aur-amdxdna] package examined for this guide:
 
@@ -615,6 +639,8 @@ quickly.
 - [XRT GEMM validation test][xrt-gemm-test]
 - [Arch `xrt` package][arch-xrt]
 - [Arch `xrt-plugin-amdxdna` package][arch-xrt-plugin]
+- [Arch `xrt-plugin-amdxdna` build recipe][arch-xrt-plugin-pkgbuild]
+- [AMD XDNA 2.21.75 validation-data pins][xdna-2.21.75-info]
 - [AUR `amdxdna-dkms` package][aur-amdxdna]
 - [AUR `amdxdna-dkms` kernel allowlist][aur-dkms-conf]
 
@@ -631,5 +657,7 @@ quickly.
 [xrt-gemm-test]: https://github.com/Xilinx/XRT/blob/master/src/runtime_src/core/tools/common/tests/TestGemm.cpp
 [arch-xrt]: https://archlinux.org/packages/extra/x86_64/xrt/
 [arch-xrt-plugin]: https://archlinux.org/packages/extra/x86_64/xrt-plugin-amdxdna/
+[arch-xrt-plugin-pkgbuild]: https://gitlab.archlinux.org/archlinux/packaging/packages/xrt-plugin-amdxdna/-/blob/1-2.21.75-2/PKGBUILD
+[xdna-2.21.75-info]: https://github.com/amd/xdna-driver/blob/2.21.75/tools/info.json
 [aur-amdxdna]: https://aur.archlinux.org/packages/amdxdna-dkms
 [aur-dkms-conf]: https://aur.archlinux.org/cgit/aur.git/plain/dkms.conf?h=amdxdna-dkms
