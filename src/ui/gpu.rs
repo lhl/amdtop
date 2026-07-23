@@ -116,18 +116,25 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             ));
         }
         f.render_widget(Paragraph::new(Line::from(device_line)), left[1]);
-        // line 2: temp + power
-        let (temp_s, pwr_s) = gpu_temp_power(a);
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(
-                    format!(" {temp_s} "),
-                    Style::default().fg(app.theme.temp().sample(0.5)),
-                ),
-                Span::styled(format!(" {pwr_s} "), Style::default().fg(app.theme.power())),
-            ])),
-            left[2],
-        );
+        // line 2: power + edge temperature + memory temperature
+        let thermal_spans = gpu_thermal_metrics(a)
+            .into_iter()
+            .enumerate()
+            .map(|(index, metric)| {
+                let prefix = if index == 0 { " " } else { "  " };
+                match metric {
+                    ThermalMetric::Power(text) => Span::styled(
+                        format!("{prefix}{text}"),
+                        Style::default().fg(app.theme.power()),
+                    ),
+                    ThermalMetric::Temperature(text) => Span::styled(
+                        format!("{prefix}{text}"),
+                        Style::default().fg(app.theme.temp().sample(0.5)),
+                    ),
+                }
+            })
+            .collect::<Vec<_>>();
+        f.render_widget(Paragraph::new(Line::from(thermal_spans)), left[2]);
         // line 3: clocks + fan
         let (sclk_s, mclk_s, fan_s) = gpu_clocks_fan(a);
         f.render_widget(
@@ -325,24 +332,54 @@ fn unavailable_detail(is_sleeping: bool) -> &'static str {
     }
 }
 
-fn gpu_temp_power(a: &libamdgpu_top::app::AppAmdgpuTop) -> (String, String) {
-    let st = &a.stat;
-    let s = st.sensors.as_ref();
-    let temp = s.and_then(|x| x.junction_temp.as_ref().or(x.edge_temp.as_ref()));
-    let temp_s = temp.map_or("  -".into(), |t| format!("{:>3}°C", t.current));
-    let pwr_s = s.map_or_else(
-        || "  -".into(),
-        |sensors| {
-            power_text(
-                sensors.average_power.as_ref().map(|power| power.value),
-                sensors
-                    .power_cap
-                    .as_ref()
-                    .and_then(|cap| effective_power_cap(cap.current, cap.default)),
-            )
-        },
-    );
-    (temp_s, pwr_s)
+#[derive(Debug, PartialEq, Eq)]
+enum ThermalMetric {
+    Power(String),
+    Temperature(String),
+}
+
+fn gpu_thermal_metrics(a: &libamdgpu_top::app::AppAmdgpuTop) -> Vec<ThermalMetric> {
+    let Some(sensors) = a.stat.sensors.as_ref() else {
+        return Vec::new();
+    };
+
+    thermal_metrics(
+        sensors.any_hwmon_power().map(|power| power.value),
+        sensors
+            .power_cap
+            .as_ref()
+            .and_then(|cap| effective_power_cap(cap.current, cap.default)),
+        sensors
+            .edge_temp
+            .as_ref()
+            .map(|temperature| temperature.current),
+        sensors
+            .memory_temp
+            .as_ref()
+            .map(|temperature| temperature.current),
+    )
+}
+
+fn thermal_metrics(
+    power_watts: Option<u32>,
+    cap_watts: Option<u32>,
+    gpu_temperature: Option<i64>,
+    memory_temperature: Option<i64>,
+) -> Vec<ThermalMetric> {
+    let mut metrics = Vec::with_capacity(3);
+    if let Some(power_watts) = power_watts {
+        metrics.push(ThermalMetric::Power(power_text(
+            Some(power_watts),
+            cap_watts,
+        )));
+    }
+    if let Some(temperature) = gpu_temperature {
+        metrics.push(ThermalMetric::Temperature(format!("GPU {temperature}°C")));
+    }
+    if let Some(temperature) = memory_temperature {
+        metrics.push(ThermalMetric::Temperature(format!("MEM {temperature}°C")));
+    }
+    metrics
 }
 
 fn effective_power_cap(current_watts: u32, default_watts: u32) -> Option<u32> {
@@ -456,8 +493,9 @@ fn short_name(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        effective_power_cap, fmt_bandwidth_rate, fmt_bytes, memory_bandwidth_text, pcie_link_text,
-        power_text, short_name, unavailable_detail, unavailable_status,
+        ThermalMetric, effective_power_cap, fmt_bandwidth_rate, fmt_bytes, memory_bandwidth_text,
+        pcie_link_text, power_text, short_name, thermal_metrics, unavailable_detail,
+        unavailable_status,
     };
 
     #[test]
@@ -506,6 +544,23 @@ mod tests {
             memory_bandwidth_text(None, Some(u16::MAX), Some(512)),
             "DRAM R- W512M/s"
         );
+    }
+
+    #[test]
+    fn thermal_metrics_are_power_first_and_omit_missing_values() {
+        assert_eq!(
+            thermal_metrics(Some(57), Some(303), Some(45), Some(70)),
+            vec![
+                ThermalMetric::Power("57/303W".into()),
+                ThermalMetric::Temperature("GPU 45°C".into()),
+                ThermalMetric::Temperature("MEM 70°C".into()),
+            ]
+        );
+        assert_eq!(
+            thermal_metrics(None, None, None, Some(70)),
+            vec![ThermalMetric::Temperature("MEM 70°C".into())]
+        );
+        assert!(thermal_metrics(None, None, None, None).is_empty());
     }
 
     #[test]

@@ -15,7 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add a hidden `r` shortcut to rediscover devices after hotplug while retaining
   sparklines for unchanged GPUs.
 
+### Changed
+
+- Simplify the GPU sensor row to show power first, followed by labeled edge and
+  memory temperatures, while omitting unavailable values.
+
 ### Fixed
+
+- Fall back to input power on GPUs that do not expose average power.
 
 - Keep runtime-suspended GPUs visible as sleeping, preserve their PCI-order
   indices, and initialize telemetry in place when another workload wakes them.
