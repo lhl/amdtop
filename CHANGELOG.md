@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Allow quitting with `Ctrl+C` in addition to `q` and `Esc`.
 - Show each GPU's maximum PCIe link generation and width beside its PCI BDF
   when available.
+- Add an XDNA NPU telemetry and workload guide covering fdinfo compatibility,
+  matched driver/XRT builds, runtime setup, validation, and troubleshooting.
 - Add a hidden `r` shortcut to rediscover devices after hotplug while retaining
   sparklines for unchanged GPUs.
 
@@ -23,7 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fall back to input power on GPUs that do not expose average power.
-
 - Keep runtime-suspended GPUs visible as sleeping, preserve their PCI-order
   indices, and initialize telemetry in place when another workload wakes them.
 - Allow for delayed AUR package-page/RPC indexing after a successful packaging

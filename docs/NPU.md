@@ -188,7 +188,7 @@ statistics but not an engine counter. The AMD repository's current
 while its [legacy implementation][amd-legacy-fdinfo] uses the older engine
 name.
 
-`amdtop` 0.2.5 pins `libamdgpu_top` 0.11.5. That version's
+`amdtop` currently pins `libamdgpu_top` 0.11.5. That version's
 [XDNA fdinfo parser][libamdgpu-top-parser] accepts
 `drm-engine-npu-amdxdna` specifically. The preferred long-term fix is for the
 parser to accept the valid engine name exported by the upstream/staging driver
