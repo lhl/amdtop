@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;
 
 use libamdgpu_top::app::{AppAmdgpuTop, AppOption};
@@ -77,6 +78,7 @@ pub struct App {
     pub themes: Vec<String>,
     pub block_style: usize,
     pub cpu_model: String,
+    process_index_sender: Sender<Vec<DevicePath>>,
 }
 
 #[derive(Clone, Debug)]
@@ -87,55 +89,21 @@ pub struct NpuInfo {
     pub fdinfo_supported: bool,
 }
 
+struct DiscoveredDevices {
+    gpus: Vec<GpuDevice>,
+    process_device_paths: Vec<DevicePath>,
+    npu_info: Option<NpuInfo>,
+}
+
 impl App {
     pub fn init() -> Self {
-        let mut dps = DevicePath::get_device_path_list();
-        // libamdgpu_top discovers devices through read_dir(), whose order is
-        // unspecified. PCI order is deterministic and matches the physical
-        // ordering used by ROCm's system-management tools.
-        dps.sort_by_key(|device| {
-            let pci = device.pci;
-            (pci.domain, pci.bus, pci.dev, pci.func)
-        });
-        for dp in &mut dps {
-            dp.fill_amdgpu_device_name();
-        }
-        // Initialize only devices that are already awake. The backend's
-        // suspended-list helper wakes one device when every GPU is asleep,
-        // which is undesirable for a system monitor.
-        let apps: Vec<AppAmdgpuTop> = dps
-            .iter()
-            .filter(|device_path| device_path.check_if_device_is_active())
-            .filter_map(|device_path| {
-                let amdgpu_dev = device_path.init().ok()?;
-                AppAmdgpuTop::new(amdgpu_dev, device_path.clone(), &AppOption::default())
-            })
-            .collect();
-        let npu_info = detect_npu(&apps);
-        let gpus: Vec<GpuDevice> = merge_devices(
-            dps.to_vec(),
-            apps,
-            |device_path| device_path.pci,
-            |app| app.device_path.pci,
-        )
-        .into_iter()
-        .map(|(device_path, app)| GpuDevice::new(device_path, app))
-        .collect();
+        let DiscoveredDevices {
+            gpus,
+            process_device_paths,
+            npu_info,
+        } = discover_devices();
         let has_npu = npu_info.is_some();
-
-        // AppAmdgpuTop populates its shared process indexes once during
-        // construction. The library's frontends start this worker separately;
-        // without it, processes created or restarted after amdtop starts never
-        // appear in the process table.
-        let mut process_device_paths = dps;
-        if let Some(xdna_device_path) = gpus
-            .iter()
-            .filter_map(|gpu| gpu.app.as_ref())
-            .find_map(|app| app.xdna_device_path.as_ref())
-        {
-            process_device_paths.push(xdna_device_path.clone());
-        }
-        stat::spawn_update_index_thread(process_device_paths, PROCESS_INDEX_REFRESH_SECS);
+        let process_index_sender = spawn_process_index_thread(process_device_paths);
 
         let collapse = CollapseState::load();
         let theme_name = if collapse.theme.is_empty() {
@@ -163,7 +131,46 @@ impl App {
             themes: Theme::list_available(),
             block_style,
             cpu_model: cpu_model(),
+            process_index_sender,
         }
+    }
+
+    pub fn refresh_devices(&mut self) {
+        let DiscoveredDevices {
+            gpus,
+            process_device_paths,
+            npu_info,
+        } = discover_devices();
+        let previous_gpus = std::mem::take(&mut self.gpus);
+
+        self.gpus = pair_refreshed_devices(
+            gpus,
+            previous_gpus,
+            |gpu| {
+                let device = &gpu.device_path;
+                (device.pci, device.device_id, device.revision_id)
+            },
+            |gpu| {
+                let device = &gpu.device_path;
+                (device.pci, device.device_id, device.revision_id)
+            },
+        )
+        .into_iter()
+        .map(|(mut refreshed, previous)| {
+            if let Some(previous) = previous {
+                refreshed.hist_gpu = previous.hist_gpu;
+                refreshed.hist_mem = previous.hist_mem;
+            }
+            refreshed
+        })
+        .collect();
+
+        if !same_npu_device(self.npu_info.as_ref(), npu_info.as_ref()) {
+            self.hist_npu = History::new(HISTORY_CAPACITY);
+        }
+        self.npu_info = npu_info;
+        self.has_npu = self.npu_info.is_some();
+        let _ = self.process_index_sender.send(process_device_paths);
     }
 
     pub fn cycle_theme(&mut self, forward: bool) -> std::io::Result<()> {
@@ -314,6 +321,102 @@ impl App {
     }
 }
 
+fn discover_devices() -> DiscoveredDevices {
+    let mut device_paths = DevicePath::get_device_path_list();
+    // libamdgpu_top discovers devices through read_dir(), whose order is
+    // unspecified. PCI order is deterministic and matches the physical
+    // ordering used by ROCm's system-management tools.
+    device_paths.sort_by_key(|device| {
+        let pci = device.pci;
+        (pci.domain, pci.bus, pci.dev, pci.func)
+    });
+    for device_path in &mut device_paths {
+        device_path.fill_amdgpu_device_name();
+    }
+
+    // Initialize only devices that are already awake. The backend's
+    // suspended-list helper wakes one device when every GPU is asleep,
+    // which is undesirable for a system monitor.
+    let active_apps: Vec<AppAmdgpuTop> = device_paths
+        .iter()
+        .filter(|device_path| device_path.check_if_device_is_active())
+        .filter_map(|device_path| {
+            let amdgpu_device = device_path.init().ok()?;
+            AppAmdgpuTop::new(amdgpu_device, device_path.clone(), &AppOption::default())
+        })
+        .collect();
+    let npu_info = detect_npu(&active_apps);
+    let gpus = merge_devices(
+        device_paths.clone(),
+        active_apps,
+        |device_path| device_path.pci,
+        |app| app.device_path.pci,
+    )
+    .into_iter()
+    .map(|(device_path, app)| GpuDevice::new(device_path, app))
+    .collect::<Vec<_>>();
+
+    let mut process_device_paths = device_paths;
+    if let Some(xdna_device_path) = gpus
+        .iter()
+        .filter_map(|gpu| gpu.app.as_ref())
+        .find_map(|app| app.xdna_device_path.as_ref())
+    {
+        process_device_paths.push(xdna_device_path.clone());
+    }
+
+    DiscoveredDevices {
+        gpus,
+        process_device_paths,
+        npu_info,
+    }
+}
+
+// Keep one process-index worker for the application's lifetime, but let a
+// manual device refresh replace its targets. This avoids leaking a permanent
+// backend worker each time the hidden refresh action is used.
+fn spawn_process_index_thread(initial_device_paths: Vec<DevicePath>) -> Sender<Vec<DevicePath>> {
+    let (sender, receiver) = mpsc::channel();
+
+    std::thread::spawn(move || {
+        let mut device_paths = initial_device_paths;
+        let mut index = Vec::new();
+        let interval = Duration::from_secs(PROCESS_INDEX_REFRESH_SECS);
+
+        loop {
+            if !device_paths.is_empty() {
+                let all_processes = stat::get_process_list();
+
+                for device_path in &device_paths {
+                    let paths: &[&PathBuf] = if device_path.is_amdgpu() {
+                        &[&device_path.render, &device_path.card]
+                    } else {
+                        &[&device_path.accel]
+                    };
+                    stat::update_index_by_all_proc(&mut index, paths, &all_processes);
+
+                    if let Ok(mut current_index) = device_path.arc_proc_index.lock() {
+                        current_index.clone_from(&index);
+                    }
+                }
+            }
+
+            match receiver.recv_timeout(interval) {
+                Ok(refreshed_device_paths) => {
+                    device_paths = refreshed_device_paths;
+                    while let Ok(newer_device_paths) = receiver.try_recv() {
+                        device_paths = newer_device_paths;
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => return,
+            }
+        }
+    });
+
+    sender
+}
+
 fn merge_devices<D, A, K: PartialEq>(
     devices: Vec<D>,
     mut active_apps: Vec<A>,
@@ -331,6 +434,25 @@ fn merge_devices<D, A, K: PartialEq>(
             (device, app)
         })
         .collect()
+}
+
+fn pair_refreshed_devices<D, P, K: PartialEq>(
+    discovered: Vec<D>,
+    previous: Vec<P>,
+    discovered_key: impl Fn(&D) -> K,
+    previous_key: impl Fn(&P) -> K,
+) -> Vec<(D, Option<P>)> {
+    merge_devices(discovered, previous, discovered_key, previous_key)
+}
+
+fn same_npu_device(previous: Option<&NpuInfo>, refreshed: Option<&NpuInfo>) -> bool {
+    match (previous, refreshed) {
+        (Some(previous), Some(refreshed)) => {
+            previous.bdf == refreshed.bdf && previous.name == refreshed.name
+        }
+        (None, None) => true,
+        _ => false,
+    }
 }
 
 fn activate_if_awake<T>(
@@ -488,7 +610,10 @@ fn memory_info(is_apu: bool, vram: (u64, u64), gtt: (u64, u64)) -> MemInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::{activate_if_awake, memory_info, merge_devices, parse_process_rss_kb};
+    use super::{
+        NpuInfo, activate_if_awake, memory_info, merge_devices, pair_refreshed_devices,
+        parse_process_rss_kb, same_npu_device,
+    };
 
     #[test]
     fn device_merge_retains_sleeping_gpus_in_discovery_order() {
@@ -501,6 +626,61 @@ mod tests {
             merged,
             vec![(1, Some((1, "gpu1"))), (2, None), (3, Some((3, "gpu3"))),]
         );
+    }
+
+    #[test]
+    fn device_refresh_preserves_state_only_for_the_same_hardware() {
+        let discovered = vec![(1, 10, 1), (2, 20, 1), (3, 30, 1), (4, 40, 1)];
+        let previous = vec![
+            (1, 10, 1, "gpu1-history"),
+            (2, 99, 1, "different-device"),
+            (3, 30, 2, "different-revision"),
+            (5, 50, 1, "removed"),
+        ];
+
+        let paired = pair_refreshed_devices(
+            discovered,
+            previous,
+            |device| (device.0, device.1, device.2),
+            |device| (device.0, device.1, device.2),
+        );
+
+        assert_eq!(
+            paired,
+            vec![
+                ((1, 10, 1), Some((1, 10, 1, "gpu1-history"))),
+                ((2, 20, 1), None),
+                ((3, 30, 1), None),
+                ((4, 40, 1), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn npu_refresh_preserves_state_only_for_the_same_hardware() {
+        let previous = NpuInfo {
+            name: "Ryzen AI".into(),
+            bdf: "0000:c4:00.1".into(),
+            fw_version: Some("1".into()),
+            fdinfo_supported: false,
+        };
+        let same_npu_new_firmware = NpuInfo {
+            fw_version: Some("2".into()),
+            fdinfo_supported: true,
+            ..previous.clone()
+        };
+        let replacement = NpuInfo {
+            name: "Different NPU".into(),
+            ..previous.clone()
+        };
+
+        assert!(same_npu_device(
+            Some(&previous),
+            Some(&same_npu_new_firmware)
+        ));
+        assert!(!same_npu_device(Some(&previous), Some(&replacement)));
+        assert!(!same_npu_device(Some(&previous), None));
+        assert!(same_npu_device(None, None));
     }
 
     #[test]

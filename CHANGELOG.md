@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Allow quitting with `Ctrl+C` in addition to `q` and `Esc`.
 - Show each GPU's maximum PCIe link generation and width beside its PCI BDF
   when available.
+- Add a hidden `r` shortcut to rediscover devices after hotplug while retaining
+  sparklines for unchanged GPUs.
 
 ### Fixed
 

@@ -169,6 +169,10 @@ fn is_quit_key(key: &KeyEvent) -> bool {
         || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
 }
 
+fn is_device_refresh_key(key: &KeyEvent) -> bool {
+    key.code == KeyCode::Char('r') && key.modifiers == KeyModifiers::NONE
+}
+
 fn run(terminal: &mut Tui, app: &mut App) -> io::Result<()> {
     let mut sample_clock = SampleClock::new(Instant::now());
     app.sample(TICK);
@@ -185,15 +189,19 @@ fn run(terminal: &mut Tui, app: &mut App) -> io::Result<()> {
                 return Ok(());
             }
 
-            match key.code {
-                KeyCode::Tab => app.next_section(),
-                KeyCode::BackTab => app.prev_section(),
-                KeyCode::Char(' ') | KeyCode::Enter => app.toggle_collapse()?,
-                KeyCode::Char('t') => app.cycle_theme(true)?,
-                KeyCode::Char('T') => app.cycle_theme(false)?,
-                KeyCode::Char('b') => app.cycle_block(true)?,
-                KeyCode::Char('B') => app.cycle_block(false)?,
-                _ => {}
+            if is_device_refresh_key(&key) {
+                app.refresh_devices();
+            } else {
+                match key.code {
+                    KeyCode::Tab => app.next_section(),
+                    KeyCode::BackTab => app.prev_section(),
+                    KeyCode::Char(' ') | KeyCode::Enter => app.toggle_collapse()?,
+                    KeyCode::Char('t') => app.cycle_theme(true)?,
+                    KeyCode::Char('T') => app.cycle_theme(false)?,
+                    KeyCode::Char('b') => app.cycle_block(true)?,
+                    KeyCode::Char('B') => app.cycle_block(false)?,
+                    _ => {}
+                }
             }
         }
 
@@ -210,7 +218,7 @@ mod tests {
 
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-    use super::{SampleClock, TICK, is_quit_key, should_set_no_drop};
+    use super::{SampleClock, TICK, is_device_refresh_key, is_quit_key, should_set_no_drop};
 
     #[test]
     fn backend_keeps_device_handles_unless_the_user_overrides_it() {
@@ -227,6 +235,22 @@ mod tests {
         assert!(!is_quit_key(&KeyEvent::new(
             KeyCode::Char('c'),
             KeyModifiers::NONE
+        )));
+    }
+
+    #[test]
+    fn plain_r_is_the_hidden_device_refresh_key() {
+        assert!(is_device_refresh_key(&KeyEvent::new(
+            KeyCode::Char('r'),
+            KeyModifiers::NONE
+        )));
+        assert!(!is_device_refresh_key(&KeyEvent::new(
+            KeyCode::Char('R'),
+            KeyModifiers::SHIFT
+        )));
+        assert!(!is_device_refresh_key(&KeyEvent::new(
+            KeyCode::Char('r'),
+            KeyModifiers::CONTROL
         )));
     }
 
