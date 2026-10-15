@@ -86,7 +86,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     let package_power = cpu_sensors
         .and_then(|sensors| sensors.average_power.as_ref())
         .map(|power| power.value);
-    let stats = Line::from(vec![
+    let mut spans = vec![
         Span::styled(
             format!(" {:.2} GHz ", f64::from(freq) / 1000.0),
             Style::default().fg(app.theme.clock()),
@@ -112,7 +112,12 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
             ),
             Style::default().fg(app.theme.graph_text()),
         ),
-    ]);
+    ];
+    // The package fan lives on the controller, not on the APU's own sensors.
+    if let Some(fan) = system_fan_text(app.system_fan_rpm) {
+        spans.push(Span::styled(fan, Style::default().fg(app.theme.fan())));
+    }
+    let stats = Line::from(spans);
     f.render_widget(Paragraph::new(stats), rl[1]);
 
     // MEM + SWP bars with absolute numbers (fixed value field => aligned tracks)
@@ -213,6 +218,18 @@ fn fmt_gb(gb: f64) -> String {
     format!("{gb:.1}G")
 }
 
+/// Fan report for the CPU stats row: the speed the tachometer measures. A
+/// machine with no readable system fan gets nothing at all, because a permanent
+/// dash would only be noise.
+///
+/// The controller's `fanN_target` is deliberately not shown. It is the setpoint
+/// of a closed-loop mode the host has to opt into, not the automatic policy
+/// that is actually driving the fan, so it stays fixed while the measured speed
+/// moves (926 here, against a measured range of 0-1422).
+fn system_fan_text(rpm: Option<u32>) -> Option<String> {
+    rpm.map(|rpm| format!("  fan {rpm}RPM"))
+}
+
 fn short_model(s: &str) -> String {
     let s = s.split(" w/").next().unwrap_or(s);
     s.replace("AMD ", "")
@@ -223,7 +240,7 @@ fn short_model(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{fmt_gb, grid_dimensions, short_model};
+    use super::{fmt_gb, grid_dimensions, short_model, system_fan_text};
 
     #[test]
     fn core_grid_keeps_at_most_eight_rows() {
@@ -244,5 +261,23 @@ mod tests {
             short_model("AMD Ryzen AI MAX+ 395 w/ Radeon Graphics"),
             "Ryzen AI MAX+ 395"
         );
+    }
+
+    #[test]
+    fn fan_report_shows_the_measured_speed() {
+        assert_eq!(
+            system_fan_text(Some(1225)).as_deref(),
+            Some("  fan 1225RPM")
+        );
+    }
+
+    #[test]
+    fn a_parked_fan_reports_zero_instead_of_disappearing() {
+        assert_eq!(system_fan_text(Some(0)).as_deref(), Some("  fan 0RPM"));
+    }
+
+    #[test]
+    fn a_machine_without_a_system_fan_shows_no_fan_field() {
+        assert_eq!(system_fan_text(None), None);
     }
 }

@@ -13,6 +13,7 @@ use libamdgpu_top::{DevicePath, stat};
 use crate::config::CollapseState;
 use crate::cpu::{CpuSampler, SystemMem, cpu_model};
 use crate::history::History;
+use crate::system_fan::SystemFan;
 use crate::theme::{DEFAULT_THEME, Theme};
 
 const HISTORY_CAPACITY: usize = 80;
@@ -78,6 +79,9 @@ pub struct App {
     pub themes: Vec<String>,
     pub block_style: usize,
     pub cpu_model: String,
+    /// Platform fan: APUs cool through the controller, not a GPU tachometer.
+    system_fan: Option<SystemFan>,
+    pub system_fan_rpm: Option<u32>,
     process_index_sender: Sender<Vec<DevicePath>>,
 }
 
@@ -131,6 +135,8 @@ impl App {
             themes: Theme::list_available(),
             block_style,
             cpu_model: cpu_model(),
+            system_fan: SystemFan::discover(),
+            system_fan_rpm: None,
             process_index_sender,
         }
     }
@@ -168,6 +174,8 @@ impl App {
         if !same_npu_device(self.npu_info.as_ref(), npu_info.as_ref()) {
             self.hist_npu = History::new(HISTORY_CAPACITY);
         }
+        // A rebound or newly attached device can bring a different fan sensor.
+        self.system_fan = SystemFan::discover();
         self.npu_info = npu_info;
         self.has_npu = self.npu_info.is_some();
         let _ = self.process_index_sender.send(process_device_paths);
@@ -221,6 +229,7 @@ impl App {
                 app.update(interval);
             }
         }
+        self.system_fan_rpm = self.system_fan.as_ref().and_then(SystemFan::read_rpm);
         send_process_targets_after_activation(&self.process_index_sender, device_activated, || {
             process_device_paths(&self.gpus)
         });

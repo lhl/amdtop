@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Report the platform fan's measured speed in the CPU stats row, read from the
+  embedded controller's hwmon device, because APUs such as Strix Halo expose no
+  tachometer of their own.
+
 ## [0.2.6] - 2026-07-23
 
 ### Added
