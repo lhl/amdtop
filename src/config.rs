@@ -1,4 +1,5 @@
-//! Persisted UI state (section collapse flags). Stored as JSON under
+//! Persisted UI state (section collapse flags, theme, gauge block style, and
+//! process-table sort). Stored as JSON under
 //! `$XDG_CONFIG_HOME/amdtop/state.json`, or `~/.config/amdtop/state.json` when
 //! `XDG_CONFIG_HOME` is unset or invalid.
 
@@ -20,6 +21,12 @@ pub struct CollapseState {
     /// Persisted gauge block-style index.
     #[serde(default)]
     pub block_style: usize,
+    /// Persisted process-table sort column index (0 = native GPU order).
+    #[serde(default)]
+    pub process_sort_key: usize,
+    /// Persisted process-table sort direction (true = descending).
+    #[serde(default)]
+    pub process_sort_desc: bool,
 }
 
 fn state_path() -> Option<PathBuf> {
@@ -106,6 +113,8 @@ mod tests {
         assert!(state.cpu);
         assert_eq!(state.theme, "");
         assert_eq!(state.block_style, 0);
+        assert_eq!(state.process_sort_key, 0);
+        assert!(!state.process_sort_desc);
     }
 
     #[test]
@@ -117,6 +126,8 @@ mod tests {
             processes: false,
             theme: "onedark".into(),
             block_style: 2,
+            process_sort_key: 4,
+            process_sort_desc: true,
         };
 
         let json = serde_json::to_string(&state).expect("serialize state");

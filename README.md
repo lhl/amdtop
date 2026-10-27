@@ -119,9 +119,11 @@ system-wide numbering. Use the displayed PCI BDF as the authoritative mapping.
 | `Space` / `Enter` | collapse / expand the focused section |
 | `t` / `T` | next / previous theme |
 | `b` / `B` | next / previous gauge block style |
+| `s` / `S` | next / previous process table sort column |
+| `d` | toggle process table sort direction |
 
-Section collapse state, the selected theme, and the gauge block style all
-persist across runs.
+Section collapse state, the selected theme, the gauge block style, and the
+process table sort all persist across runs.
 
 ## Configuration
 
@@ -151,6 +153,13 @@ unavailable until amdtop is restarted.
 Cycle the bar fill glyph with `b`/`B`:
 `3/4` (▊, default), `smooth` (precise fractional █), `dotmatrix` (⣿ LED cell),
 `lines` (━/─), `squares` (■/□), `rects` (▮/▯), `pills` (▰/▱).
+
+### Process table sort
+
+Cycle the sort column with `s`/`S` and flip its direction with `d`. Columns
+are PID, NAME, MEM, VRAM, GTT, GFX%, COMP%, DMA%, and CPU%; the default is
+the native device order (grouped by GPU). The active column is marked with
+`▲`/`▼` in the table header, and the choice persists in `state.json`.
 
 ## Themes
 

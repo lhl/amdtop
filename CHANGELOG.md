@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sort the process table by any column: `s`/`S` cycles the sort column and
+  `d` toggles its direction. The default is the native device order, the
+  active column is marked with `▲`/`▼` in the header, and the choice
+  persists in `state.json`.
+
 ## [0.2.6] - 2026-07-23
 
 ### Added

@@ -202,6 +202,10 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
                 .add_modifier(Modifier::BOLD)
                 .bg(bg),
         ),
+        Span::styled(" s/S ", key),
+        Span::styled("sort column  ", lbl),
+        Span::styled(" d ", key),
+        Span::styled("sort direction", lbl),
     ];
     f.render_widget(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(bg)),

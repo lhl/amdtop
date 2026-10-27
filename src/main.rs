@@ -200,6 +200,9 @@ fn run(terminal: &mut Tui, app: &mut App) -> io::Result<()> {
                     KeyCode::Char('T') => app.cycle_theme(false)?,
                     KeyCode::Char('b') => app.cycle_block(true)?,
                     KeyCode::Char('B') => app.cycle_block(false)?,
+                    KeyCode::Char('s') => app.cycle_sort_key(true)?,
+                    KeyCode::Char('S') => app.cycle_sort_key(false)?,
+                    KeyCode::Char('d') => app.toggle_sort_dir()?,
                     _ => {}
                 }
             }

@@ -18,6 +18,13 @@ use crate::theme::{DEFAULT_THEME, Theme};
 const HISTORY_CAPACITY: usize = 80;
 const PROCESS_INDEX_REFRESH_SECS: u64 = 5;
 
+/// Process-table columns. Index 0 ("GPU") marks the native device order and is
+/// the default sort; indices 1..=9 are sortable and double as process sort
+/// keys. The UI renders this as the table header.
+pub const PROCESS_COLUMNS: [&str; 10] = [
+    "GPU", "PID", "NAME", "MEM", "VRAM", "GTT", "GFX%", "COMP%", "DMA%", "CPU%",
+];
+
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum Section {
     Cpu,
@@ -77,6 +84,8 @@ pub struct App {
     pub theme_name: String,
     pub themes: Vec<String>,
     pub block_style: usize,
+    pub process_sort_key: usize,
+    pub process_sort_desc: bool,
     pub cpu_model: String,
     process_index_sender: Sender<Vec<DevicePath>>,
 }
@@ -113,6 +122,8 @@ impl App {
         };
         let theme = Theme::load(&theme_name);
         let block_style = collapse.block_style % crate::gauge::BLOCK_STYLES.len();
+        let process_sort_key = collapse.process_sort_key % PROCESS_COLUMNS.len();
+        let process_sort_desc = collapse.process_sort_desc;
 
         Self {
             gpus,
@@ -130,6 +141,8 @@ impl App {
             theme_name,
             themes: Theme::list_available(),
             block_style,
+            process_sort_key,
+            process_sort_desc,
             cpu_model: cpu_model(),
             process_index_sender,
         }
@@ -207,6 +220,28 @@ impl App {
 
     pub fn block_style_name(&self) -> &'static str {
         crate::gauge::block_style(self.block_style).name
+    }
+
+    /// Cycle the process-table sort column. Lands on the Processes section so
+    /// the change is visible even when another section is focused.
+    pub fn cycle_sort_key(&mut self, forward: bool) -> std::io::Result<()> {
+        let len = PROCESS_COLUMNS.len();
+        self.process_sort_key = if forward {
+            (self.process_sort_key + 1) % len
+        } else {
+            (self.process_sort_key + len - 1) % len
+        };
+        self.section = Section::Processes;
+        self.collapse.process_sort_key = self.process_sort_key;
+        self.save_state()
+    }
+
+    /// Toggle the process-table sort direction (ascending/descending).
+    pub fn toggle_sort_dir(&mut self) -> std::io::Result<()> {
+        self.process_sort_desc = !self.process_sort_desc;
+        self.section = Section::Processes;
+        self.collapse.process_sort_desc = self.process_sort_desc;
+        self.save_state()
     }
 
     pub fn active_apps(&self) -> impl Iterator<Item = &AppAmdgpuTop> {
