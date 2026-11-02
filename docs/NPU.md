@@ -11,7 +11,10 @@
 
 ## Quick answer
 
-To show live NPU utilization, `amdtop` needs all of the following:
+On APUs, the device-level NPU gauge falls back to the amdgpu `gpu_metrics`
+table and works with the in-tree driver (see
+[Current compatibility caveat](#current-compatibility-caveat)). To show live
+per-context NPU utilization, `amdtop` needs all of the following:
 
 1. An AMD XDNA device bound to `amdxdna`, normally visible as
    `/dev/accel/accel0`.
@@ -176,8 +179,8 @@ At the time of writing, there are three materially different combinations:
 
 | Driver source | Engine output | `libamdgpu_top` 0.11.5 |
 |---|---|---|
-| Linux v7.2-rc1 in-tree `amdxdna` | No `drm-engine-*` line | No utilization possible |
-| AMD upstream/staging tree at or after [`a87f856`][busy-time-commit] | `drm-engine-amdxdna_accel_driver` | Counter is currently not recognized |
+| Linux v7.2-rc1 in-tree `amdxdna` | No `drm-engine-*` line | No per-context utilization; device gauge falls back to `gpu_metrics` |
+| AMD upstream/staging tree at or after [`a87f856`][busy-time-commit] | `drm-engine-amdxdna_accel_driver` | Counter is currently not recognized; device gauge falls back to `gpu_metrics` |
 | AMD legacy/out-of-tree tree | `drm-engine-npu-amdxdna` | Recognized |
 
 The upstream/staging busy-time patch was added to AMD's repository as
@@ -196,11 +199,13 @@ parser to accept the valid engine name exported by the upstream/staging driver
 is the shortest path to testing the released parser, while the staging driver
 is the better path for testing the future stack.
 
-There is also a current UI-detection limitation: `amdtop` uses the presence of
-`drm-driver` as its initial fdinfo capability probe. A driver that exports DRM
-memory statistics but no recognized engine counter can therefore appear as a
-0% gauge instead of `N/A`. Trust the direct `drm-engine-*` check above when
-diagnosing telemetry.
+When fdinfo has no engine counter that `libamdgpu_top` parses, `amdtop` takes
+the device-level NPU gauge from the APU's `gpu_metrics` table instead: the
+busiest of the `average_ipu_activity` columns, plus NPU clock and power. The
+NPU panel names the source (`fdinfo telemetry` or `firmware gpu_metrics`).
+Per-context NPU% needs the fdinfo counter, so it shows `N/A` without one.
+Trust the direct `drm-engine-*` check above when diagnosing per-context
+telemetry.
 
 ## Recommended installation strategy
 

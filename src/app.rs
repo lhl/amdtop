@@ -8,7 +8,7 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;
 
 use libamdgpu_top::app::{AppAmdgpuTop, AppOption};
-use libamdgpu_top::{DevicePath, stat};
+use libamdgpu_top::{DevicePath, GetNpuMetrics, stat};
 
 use crate::config::CollapseState;
 use crate::cpu::{CpuSampler, SystemMem, cpu_model};
@@ -72,6 +72,8 @@ pub struct App {
     pub hist_npu: History,
     pub hist_cores: Vec<History>, // per logical CPU
     pub npu_info: Option<NpuInfo>,
+    pub npu_telemetry: NpuTelemetry,
+    pub npu_firmware: Option<NpuFirmware>,
     pub has_npu: bool,
     pub theme: Theme,
     pub theme_name: String,
@@ -87,6 +89,27 @@ pub struct NpuInfo {
     pub bdf: String,
     pub fw_version: Option<String>,
     pub fdinfo_supported: bool,
+    /// Whether the driver's fdinfo carries a busy-time counter that
+    /// libamdgpu_top can parse. In-tree amdxdna (Linux 7.x) reports memory
+    /// only; AMD's staging tree uses an engine key the parser does not know.
+    pub engine_counter: bool,
+}
+
+/// Where the device-level NPU utilization comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NpuTelemetry {
+    /// Sum of per-context `drm-engine-*` busy time from amdxdna fdinfo.
+    Fdinfo,
+    /// `average_ipu_activity` from the APU's `gpu_metrics` table.
+    Firmware,
+    Unavailable,
+}
+
+/// NPU clock and power from the APU's `gpu_metrics` table.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NpuFirmware {
+    pub clock_mhz: u16,
+    pub power_w: f64,
 }
 
 struct DiscoveredDevices {
@@ -125,6 +148,8 @@ impl App {
             hist_npu: History::new(HISTORY_CAPACITY),
             hist_cores: Vec::new(),
             npu_info,
+            npu_telemetry: NpuTelemetry::Unavailable,
+            npu_firmware: None,
             has_npu,
             theme,
             theme_name,
@@ -255,13 +280,30 @@ impl App {
             }
         }
 
-        // NPU aggregate (sum of per-context npu%, clamped)
+        // NPU aggregate: per-context fdinfo busy time when the driver reports
+        // it, otherwise the firmware's own activity counters.
         let npu_sum = self
             .active_apps()
             .flat_map(|app| &app.stat.xdna_fdinfo.proc_usage)
             .map(|process| process.usage.npu.max(0))
             .sum::<i64>();
-        self.hist_npu.push(npu_sum.clamp(0, 100) as u64);
+        let firmware = self
+            .active_apps()
+            .find_map(|app| app.stat.metrics.as_ref()?.get_npu_metrics());
+        let engine_counter = self.npu_info.as_ref().is_some_and(|n| n.engine_counter);
+        let (busy, telemetry) = npu_busy(
+            engine_counter,
+            npu_sum,
+            firmware.as_ref().map(|m| m.npu_busy.as_slice()),
+        );
+        self.npu_telemetry = telemetry;
+        self.npu_firmware = firmware.map(|m| NpuFirmware {
+            clock_mhz: m.npuclk_freq,
+            power_w: f64::from(m.npu_power) / 1000.0,
+        });
+        if let Some(busy) = busy {
+            self.hist_npu.push(busy);
+        }
     }
 
     fn sample_process_memory(&mut self) {
@@ -478,7 +520,8 @@ fn activate_if_awake<T>(
 fn detect_npu(apps: &[AppAmdgpuTop]) -> Option<NpuInfo> {
     if let Some(info) = apps.iter().find_map(|app| {
         app.xdna_device_path.as_ref().map(|device_path| {
-            NpuInfo::from_device_path(device_path, app.xdna_fw_version.clone(), true)
+            let probe = probe_fdinfo(&device_path.accel);
+            NpuInfo::from_device_path(device_path, app.xdna_fw_version.clone(), true, probe)
         })
     }) {
         return Some(info);
@@ -492,6 +535,7 @@ impl NpuInfo {
         device_path: &DevicePath,
         fw_version: Option<String>,
         fdinfo_supported: bool,
+        probe: FdinfoProbe,
     ) -> Self {
         let name = if device_path.device_name.trim().is_empty() {
             read_trim(device_path.sysfs_path.join("vbnv")).unwrap_or_else(|| "XDNA NPU".to_string())
@@ -505,6 +549,7 @@ impl NpuInfo {
             bdf: device_path.pci.to_string(),
             fw_version,
             fdinfo_supported,
+            engine_counter: probe.engine_counter,
         }
     }
 }
@@ -533,13 +578,14 @@ fn detect_npu_from_sysfs() -> Option<NpuInfo> {
             .unwrap_or("unknown")
             .to_string();
         let fw_version = read_trim(sysfs_path.join("fw_version"));
-        let fdinfo_supported = fdinfo_has_drm_driver(&accel_path);
+        let probe = probe_fdinfo(&accel_path);
 
         return Some(NpuInfo {
             name,
             bdf,
             fw_version,
-            fdinfo_supported,
+            fdinfo_supported: probe.driver,
+            engine_counter: probe.engine_counter,
         });
     }
 
@@ -569,18 +615,60 @@ fn parse_process_rss_kb(status: &str) -> Option<u64> {
     })
 }
 
-fn fdinfo_has_drm_driver(accel_path: &Path) -> bool {
+/// The XDNA fdinfo engine key that libamdgpu_top 0.11.5 parses.
+const XDNA_PARSED_ENGINE_KEY: &str = "drm-engine-npu-amdxdna:";
+
+/// What the accel driver's DRM fdinfo exposes for a client.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct FdinfoProbe {
+    driver: bool,
+    engine_counter: bool,
+}
+
+fn probe_fdinfo(accel_path: &Path) -> FdinfoProbe {
     let Ok(file) = fs::OpenOptions::new()
         .read(true)
         .write(true)
         .open(accel_path)
     else {
-        return false;
+        return FdinfoProbe::default();
     };
     let fd = file.as_raw_fd();
 
     fs::read_to_string(format!("/proc/self/fdinfo/{fd}"))
-        .is_ok_and(|s| s.lines().any(|line| line.starts_with("drm-driver")))
+        .map(|s| parse_fdinfo_probe(&s))
+        .unwrap_or_default()
+}
+
+fn parse_fdinfo_probe(fdinfo: &str) -> FdinfoProbe {
+    FdinfoProbe {
+        driver: fdinfo.lines().any(|line| line.starts_with("drm-driver")),
+        // Driver trees disagree on the engine name. libamdgpu_top 0.11.5 parses
+        // only the legacy `npu-amdxdna` key and reports 0 for the staging
+        // `amdxdna_accel_driver` one, so only the legacy key is usable.
+        engine_counter: fdinfo
+            .lines()
+            .any(|line| line.starts_with(XDNA_PARSED_ENGINE_KEY)),
+    }
+}
+
+/// Device-level NPU busy percent and its source.
+///
+/// fdinfo engine time wins when the driver reports it. Otherwise the busiest
+/// valid `gpu_metrics` IPU column is used (`u16::MAX` marks an unsupported
+/// column). With neither, utilization is unknown rather than 0%.
+fn npu_busy(
+    engine_counter: bool,
+    fdinfo_sum: i64,
+    firmware_columns: Option<&[u16]>,
+) -> (Option<u64>, NpuTelemetry) {
+    if engine_counter {
+        return (Some(fdinfo_sum.clamp(0, 100) as u64), NpuTelemetry::Fdinfo);
+    }
+    match firmware_columns.and_then(|columns| columns.iter().copied().filter(|&b| b <= 100).max()) {
+        Some(busy) => (Some(u64::from(busy)), NpuTelemetry::Firmware),
+        None => (None, NpuTelemetry::Unavailable),
+    }
 }
 
 /// APU-aware memory usage. APUs use the GTT (system RAM) pool; discrete GPUs
@@ -620,9 +708,70 @@ mod tests {
     use std::sync::mpsc::{self, TryRecvError};
 
     use super::{
-        NpuInfo, activate_if_awake, memory_info, pair_by_key, parse_process_rss_kb,
-        same_npu_device, send_process_targets_after_activation,
+        FdinfoProbe, NpuInfo, NpuTelemetry, activate_if_awake, memory_info, npu_busy, pair_by_key,
+        parse_fdinfo_probe, parse_process_rss_kb, same_npu_device,
+        send_process_targets_after_activation,
     };
+
+    #[test]
+    fn fdinfo_probe_detects_driver_and_engine_counter_separately() {
+        // In-tree amdxdna (Linux 7.x): memory keys only, no busy-time counter.
+        let in_tree = "pos:\t0\ndrm-driver:\tamdxdna_accel_driver\ndrm-client-id:\t31\n\
+                       drm-total-memory:\t6153652 KiB\n";
+        // Legacy and staging drivers use different engine key names.
+        let legacy = "drm-driver:\tamdxdna_accel_driver\ndrm-engine-npu-amdxdna:\t76360 ns\n";
+        let staging = "drm-driver:\tamdxdna_accel_driver\ndrm-engine-amdxdna_accel_driver:\t0 ns\n";
+
+        assert_eq!(
+            parse_fdinfo_probe(in_tree),
+            FdinfoProbe {
+                driver: true,
+                engine_counter: false
+            }
+        );
+        assert!(parse_fdinfo_probe(legacy).engine_counter);
+        // libamdgpu_top 0.11.5 parses only the legacy key and reports 0 for
+        // the staging one, so that counter is not usable; the firmware
+        // fallback must stay in charge.
+        assert!(!parse_fdinfo_probe(staging).engine_counter);
+        assert_eq!(parse_fdinfo_probe("pos:\t0\n"), FdinfoProbe::default());
+    }
+
+    #[test]
+    fn npu_busy_prefers_fdinfo_engine_time_when_the_driver_reports_it() {
+        assert_eq!(
+            npu_busy(true, 42, Some(&[90, 90])),
+            (Some(42), NpuTelemetry::Fdinfo)
+        );
+        assert_eq!(npu_busy(true, 250, None), (Some(100), NpuTelemetry::Fdinfo));
+    }
+
+    #[test]
+    fn npu_busy_falls_back_to_firmware_metrics_without_an_engine_counter() {
+        // The busiest column is the device-level utilization.
+        assert_eq!(
+            npu_busy(false, 0, Some(&[80, 99, 75, 0])),
+            (Some(99), NpuTelemetry::Firmware)
+        );
+        // 0xFFFF marks an unsupported column in gpu_metrics.
+        assert_eq!(
+            npu_busy(false, 0, Some(&[u16::MAX, 12])),
+            (Some(12), NpuTelemetry::Firmware)
+        );
+    }
+
+    #[test]
+    fn npu_busy_is_unavailable_without_any_telemetry() {
+        assert_eq!(npu_busy(false, 0, None), (None, NpuTelemetry::Unavailable));
+        assert_eq!(
+            npu_busy(false, 0, Some(&[u16::MAX; 8])),
+            (None, NpuTelemetry::Unavailable)
+        );
+        assert_eq!(
+            npu_busy(false, 0, Some(&[])),
+            (None, NpuTelemetry::Unavailable)
+        );
+    }
 
     #[test]
     fn device_merge_retains_sleeping_gpus_in_discovery_order() {
@@ -672,6 +821,7 @@ mod tests {
             bdf: "0000:c4:00.1".into(),
             fw_version: Some("1".into()),
             fdinfo_supported: false,
+            engine_counter: false,
         };
         let same_npu_new_firmware = NpuInfo {
             fw_version: Some("2".into()),

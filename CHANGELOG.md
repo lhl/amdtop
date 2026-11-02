@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Show NPU utilization from the APU's `gpu_metrics` table when amdxdna fdinfo
+  has no busy-time counter that `libamdgpu_top` can parse, as with the in-tree
+  driver. The NPU gauge read 0% while the NPU was busy. The panel names the
+  source in use and shows NPU clock and power.
+- Show per-context NPU% as `N/A` instead of `0` when no busy-time counter is
+  available.
+
 ## [0.2.6] - 2026-07-23
 
 ### Added
