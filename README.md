@@ -28,7 +28,7 @@ layout.
   VRAM on discrete cards — both labeled `MEM`
 - **Adaptive memory-bandwidth telemetry**: shows memory-controller utilization
   where available alongside SoC DRAM read/write throughput on supported APUs
-- **XDNA NPU**: presence detection on `/sys/class/accel`; utilization + per-context table when the `amdxdna` driver exposes DRM fdinfo telemetry
+- **XDNA NPU**: presence detection on `/sys/class/accel`; device utilization, clock, and power from the APU's `gpu_metrics` table; per-context utilization when the `amdxdna` driver exposes DRM fdinfo busy time
 - **Process table**: per-process resident system memory (`MEM`), VRAM/GTT,
   and engine usage
 - **41 native bundled themes**: available without btop or external data files;
@@ -76,11 +76,12 @@ Distro packages for the `libdrm` build headers:
 ### NPU telemetry requirements
 
 `amdtop` detects AMD XDNA/Ryzen AI NPUs through the Linux accel class
-(`/sys/class/accel` and `/dev/accel/accel*`). Device detection is enough to show
-identity and firmware information, but not live utilization.
+(`/sys/class/accel` and `/dev/accel/accel*`). On APUs, device-level NPU
+utilization, clock, and power come from the amdgpu `gpu_metrics` table, so they
+work with the in-tree `amdxdna` driver.
 
-Utilization and per-context monitoring require a cumulative `drm-engine-*`
-busy-time counter from the loaded `amdxdna` kernel module. A `drm-driver` line
+Per-context utilization requires a cumulative `drm-engine-*` busy-time counter
+from the loaded `amdxdna` kernel module. A `drm-driver` line
 or an installed DKMS package alone is not sufficient. XDNA driver trees also
 currently emit more than one engine-key name, and released telemetry parsers do
 not recognize all of them.
