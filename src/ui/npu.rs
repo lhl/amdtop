@@ -150,6 +150,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         );
     }
 
+    let engine_counter = npu.is_some_and(|n| n.engine_counter);
     let rows: Vec<Row> = app
         .active_apps()
         .flat_map(|a| a.stat.xdna_fdinfo.proc_usage.iter())
@@ -159,7 +160,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
                 pu.name.chars().take(24).collect::<String>(),
                 pu.ids_count.to_string(),
                 format!("{}K", pu.usage.total_memory),
-                pu.usage.npu.to_string(),
+                process_npu_text(engine_counter, pu.usage.npu),
             ])
         })
         .collect();
@@ -208,6 +209,16 @@ fn telemetry_label(telemetry: NpuTelemetry, fdinfo_supported: bool) -> &'static 
     }
 }
 
+/// Per-context NPU share. Without a fdinfo busy-time counter the share is
+/// unknown, even when the device-level gauge falls back to gpu_metrics.
+fn process_npu_text(engine_counter: bool, npu: i64) -> String {
+    if engine_counter {
+        npu.max(0).to_string()
+    } else {
+        "N/A".to_string()
+    }
+}
+
 fn firmware_text(firmware: Option<NpuFirmware>) -> Option<String> {
     firmware.map(|fw| format!("{} MHz  {:.2} W", fw.clock_mhz, fw.power_w))
 }
@@ -220,7 +231,7 @@ fn npu_ctx_count(app: &App) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{firmware_text, telemetry_label};
+    use super::{firmware_text, process_npu_text, telemetry_label};
     use crate::app::{NpuFirmware, NpuTelemetry};
 
     #[test]
@@ -242,6 +253,14 @@ mod tests {
             telemetry_label(NpuTelemetry::Unavailable, false),
             "detected; fdinfo unavailable"
         );
+    }
+
+    #[test]
+    fn process_npu_share_is_unknown_without_an_engine_counter() {
+        assert_eq!(process_npu_text(true, 37), "37");
+        assert_eq!(process_npu_text(true, -1), "0");
+        // Memory-only fdinfo cannot attribute NPU time to a context.
+        assert_eq!(process_npu_text(false, 0), "N/A");
     }
 
     #[test]
