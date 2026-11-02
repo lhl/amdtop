@@ -89,8 +89,9 @@ pub struct NpuInfo {
     pub bdf: String,
     pub fw_version: Option<String>,
     pub fdinfo_supported: bool,
-    /// Whether the driver's fdinfo carries a `drm-engine-*` busy-time counter.
-    /// In-tree amdxdna (Linux 7.x) reports memory only.
+    /// Whether the driver's fdinfo carries a busy-time counter that
+    /// libamdgpu_top can parse. In-tree amdxdna (Linux 7.x) reports memory
+    /// only; AMD's staging tree uses an engine key the parser does not know.
     pub engine_counter: bool,
 }
 
@@ -614,6 +615,9 @@ fn parse_process_rss_kb(status: &str) -> Option<u64> {
     })
 }
 
+/// The XDNA fdinfo engine key that libamdgpu_top 0.11.5 parses.
+const XDNA_PARSED_ENGINE_KEY: &str = "drm-engine-npu-amdxdna:";
+
 /// What the accel driver's DRM fdinfo exposes for a client.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct FdinfoProbe {
@@ -639,9 +643,12 @@ fn probe_fdinfo(accel_path: &Path) -> FdinfoProbe {
 fn parse_fdinfo_probe(fdinfo: &str) -> FdinfoProbe {
     FdinfoProbe {
         driver: fdinfo.lines().any(|line| line.starts_with("drm-driver")),
-        // Driver trees disagree on the engine name (`npu-amdxdna`,
-        // `amdxdna_accel_driver`), so any engine key counts.
-        engine_counter: fdinfo.lines().any(|line| line.starts_with("drm-engine-")),
+        // Driver trees disagree on the engine name. libamdgpu_top 0.11.5 parses
+        // only the legacy `npu-amdxdna` key and reports 0 for the staging
+        // `amdxdna_accel_driver` one, so only the legacy key is usable.
+        engine_counter: fdinfo
+            .lines()
+            .any(|line| line.starts_with(XDNA_PARSED_ENGINE_KEY)),
     }
 }
 
@@ -723,7 +730,10 @@ mod tests {
             }
         );
         assert!(parse_fdinfo_probe(legacy).engine_counter);
-        assert!(parse_fdinfo_probe(staging).engine_counter);
+        // libamdgpu_top 0.11.5 parses only the legacy key and reports 0 for
+        // the staging one, so that counter is not usable; the firmware
+        // fallback must stay in charge.
+        assert!(!parse_fdinfo_probe(staging).engine_counter);
         assert_eq!(parse_fdinfo_probe("pos:\t0\n"), FdinfoProbe::default());
     }
 
