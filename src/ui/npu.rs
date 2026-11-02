@@ -4,7 +4,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row, Table};
 
-use crate::app::{App, Section};
+use crate::app::{App, NpuFirmware, NpuTelemetry, Section};
 use crate::gauge::{self, Kind};
 use crate::theme::{SectionBox, UtilKind};
 
@@ -17,9 +17,10 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
 
     let npu = app.npu_info.as_ref();
     let fdinfo_supported = npu.is_some_and(|n| n.fdinfo_supported);
+    let has_busy = app.npu_telemetry != NpuTelemetry::Unavailable;
 
     if app.is_collapsed(Section::Npu) {
-        let pct_span = if fdinfo_supported {
+        let pct_span = if has_busy {
             let npu_pct = app.hist_npu.latest() as f64;
             Span::styled(
                 format!(" {:>3}% ", npu_pct.round()),
@@ -30,6 +31,8 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         };
         let status = if fdinfo_supported {
             format!("{} contexts  ", npu_ctx_count(app))
+        } else if has_busy {
+            format!("{}  ", telemetry_label(app.npu_telemetry, fdinfo_supported))
         } else {
             "telemetry unavailable  ".to_string()
         };
@@ -92,11 +95,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         ])),
         left[2],
     );
-    let telemetry = if fdinfo_supported {
-        "fdinfo telemetry"
-    } else {
-        "detected; fdinfo unavailable"
-    };
+    let telemetry = telemetry_label(app.npu_telemetry, fdinfo_supported);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             format!(" {telemetry}"),
@@ -105,7 +104,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         left[3],
     );
 
-    let npu_pct = fdinfo_supported.then(|| app.hist_npu.latest() as f64);
+    let npu_pct = has_busy.then(|| app.hist_npu.latest() as f64);
     let right = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -121,7 +120,7 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
         )),
         right[0],
     );
-    if fdinfo_supported {
+    if has_busy {
         let graph = app
             .hist_npu
             .braille_graph(cols[1].width as usize, 2, app.theme.npu());
@@ -139,6 +138,15 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
                 Style::default().fg(app.theme.inactive_fg()),
             ))),
             right[1],
+        );
+    }
+    if let Some(text) = firmware_text(app.npu_firmware) {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                format!(" {text}"),
+                Style::default().fg(app.theme.graph_text()),
+            ))),
+            right[2],
         );
     }
 
@@ -191,8 +199,58 @@ pub(super) fn draw(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(table, top_table[1]);
 }
 
+fn telemetry_label(telemetry: NpuTelemetry, fdinfo_supported: bool) -> &'static str {
+    match telemetry {
+        NpuTelemetry::Fdinfo => "fdinfo telemetry",
+        NpuTelemetry::Firmware => "firmware gpu_metrics",
+        NpuTelemetry::Unavailable if fdinfo_supported => "fdinfo has no busy counter",
+        NpuTelemetry::Unavailable => "detected; fdinfo unavailable",
+    }
+}
+
+fn firmware_text(firmware: Option<NpuFirmware>) -> Option<String> {
+    firmware.map(|fw| format!("{} MHz  {:.2} W", fw.clock_mhz, fw.power_w))
+}
+
 fn npu_ctx_count(app: &App) -> usize {
     app.active_apps()
         .map(|a| a.stat.xdna_fdinfo.proc_usage.len())
         .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{firmware_text, telemetry_label};
+    use crate::app::{NpuFirmware, NpuTelemetry};
+
+    #[test]
+    fn telemetry_label_names_the_utilization_source() {
+        assert_eq!(
+            telemetry_label(NpuTelemetry::Fdinfo, true),
+            "fdinfo telemetry"
+        );
+        assert_eq!(
+            telemetry_label(NpuTelemetry::Firmware, true),
+            "firmware gpu_metrics"
+        );
+        // fdinfo exists but carries no busy-time counter (in-tree amdxdna).
+        assert_eq!(
+            telemetry_label(NpuTelemetry::Unavailable, true),
+            "fdinfo has no busy counter"
+        );
+        assert_eq!(
+            telemetry_label(NpuTelemetry::Unavailable, false),
+            "detected; fdinfo unavailable"
+        );
+    }
+
+    #[test]
+    fn firmware_text_shows_clock_and_power() {
+        let fw = NpuFirmware {
+            clock_mhz: 1802,
+            power_w: 1.604,
+        };
+        assert_eq!(firmware_text(Some(fw)).as_deref(), Some("1802 MHz  1.60 W"));
+        assert_eq!(firmware_text(None), None);
+    }
 }
