@@ -14,6 +14,7 @@ mod config;
 mod cpu;
 mod gauge;
 mod history;
+mod system_fan;
 mod theme;
 mod ui;
 
