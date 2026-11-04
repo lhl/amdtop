@@ -13,16 +13,25 @@ const AMDGPU_HWMON_NAME: &str = "amdgpu";
 
 /// hwmon drivers known to expose the fan that cools the CPU/APU package.
 ///
+/// The names are what each driver registers with the hwmon core, which is
+/// what `/sys/class/hwmon/hwmonN/name` returns: the thinkpad-acpi platform
+/// driver is called `thinkpad_hwmon`, but its sensor is called `thinkpad`.
+///
 /// This list only breaks ties. When exactly one non-GPU sensor has a
 /// tachometer it is unambiguous, even if its driver is not listed here, so
 /// unknown embedded controllers keep working without a code change.
 const SYSTEM_FAN_DRIVERS: &[&str] = &[
-    "cros_ec",         // Framework and other ChromiumOS-EC machines
-    "asus_ec_sensors", // ASUS laptops with an EC fan channel
-    "dell_smm_hwmon",  // Dell laptops via SMM
-    "msi_ec",          // MSI laptops with an EC fan channel
-    "thinkpad_hwmon",  // Lenovo ThinkPads via thinkpad-acpi
+    "cros_ec",  // Framework and other ChromiumOS-EC machines
+    "asusec",   // ASUS laptops with an EC fan channel (asus-ec-sensors)
+    "dell_smm", // Dell laptops via SMM (dell-smm-hwmon)
+    "thinkpad", // Lenovo ThinkPads via thinkpad-acpi
 ];
+
+/// The generic ACPI fan device (`drivers/acpi/fan_hwmon.c`), present on many
+/// laptops and often reading 0 while the real fan spins on another sensor, so
+/// it ranks behind every other candidate and is only trusted when it alone
+/// reports a spinning tachometer.
+const ACPI_FAN_DRIVER: &str = "acpi_fan";
 
 /// A platform fan sensor, discovered from the hwmon devices outside amdgpu.
 #[derive(Clone, Debug)]
@@ -50,6 +59,8 @@ struct HwmonSensor {
     hwmon_path: PathBuf,
     driver: String,
     has_fan: bool,
+    /// Measured speed from this device's tachometers, if any is readable.
+    rpm: Option<u32>,
 }
 
 /// Decide which hwmon device is the system fan.
@@ -59,7 +70,21 @@ fn select_fan_sensor(sensors: Vec<HwmonSensor>) -> Option<HwmonSensor> {
         .filter(|sensor| sensor.has_fan && sensor.driver != AMDGPU_HWMON_NAME)
         .collect();
 
-    if let Some(sensor) = candidates
+    // `acpi_fan` shadows the real fan on many laptops and typically sits at
+    // zero, so set it aside unless it is the machine's only tachometer.
+    let (acpi_fan, others): (Vec<HwmonSensor>, Vec<HwmonSensor>) = candidates
+        .into_iter()
+        .partition(|sensor| sensor.driver == ACPI_FAN_DRIVER);
+
+    if others.is_empty() {
+        // Report `acpi_fan` alone only when its tachometer actually spins;
+        // a parked or unpopulated one would claim a fan that is not there.
+        return acpi_fan
+            .into_iter()
+            .find(|sensor| sensor.rpm.unwrap_or(0) > 0);
+    }
+
+    if let Some(sensor) = others
         .iter()
         .find(|sensor| SYSTEM_FAN_DRIVERS.contains(&sensor.driver.as_str()))
     {
@@ -68,8 +93,8 @@ fn select_fan_sensor(sensors: Vec<HwmonSensor>) -> Option<HwmonSensor> {
 
     // Otherwise a lone tachometer can only be the platform fan. With two or
     // more, one of them may be a chassis or drive fan, so refuse to guess.
-    let mut candidates = candidates.into_iter();
-    match (candidates.next(), candidates.next()) {
+    let mut others = others.into_iter();
+    match (others.next(), others.next()) {
         (Some(sensor), None) => Some(sensor),
         _ => None,
     }
@@ -113,10 +138,12 @@ fn read_hwmon_sensors(root: &Path) -> Vec<HwmonSensor> {
                 .ok()?
                 .trim()
                 .to_string();
+            let rpm = fan_rpm(&read_fan_inputs(&hwmon_path));
             Some(HwmonSensor {
                 has_fan: hwmon_path.join("fan1_input").is_file(),
                 hwmon_path,
                 driver,
+                rpm,
             })
         })
         .collect::<Vec<_>>();
@@ -150,7 +177,19 @@ mod tests {
             hwmon_path: format!("/sys/class/hwmon/{driver}").into(),
             driver: driver.to_string(),
             has_fan,
+            rpm: None,
         }
+    }
+
+    fn acpi_fan(rpm: u32) -> HwmonSensor {
+        HwmonSensor {
+            rpm: Some(rpm),
+            ..sensor("acpi_fan", true)
+        }
+    }
+
+    fn acpi_fan_unreadable() -> HwmonSensor {
+        sensor("acpi_fan", true)
     }
 
     fn driver_of(selected: Option<HwmonSensor>) -> Option<String> {
@@ -257,6 +296,69 @@ mod tests {
             reading("fan1_target", "926\n"),
         ];
         assert_eq!(fan_rpm(&readings), None);
+    }
+
+    #[test]
+    fn driver_names_match_what_the_kernel_registers() {
+        // The names are read from the hwmon device's `name` attribute, which
+        // is what the driver passes to devm_hwmon_device_register_with_*();
+        // the platform driver's own name (thinkpad_hwmon, dell_smm_hwmon) is
+        // not it, and msi_ec registers no hwmon device at all.
+        assert_eq!(
+            SYSTEM_FAN_DRIVERS,
+            &["cros_ec", "asusec", "dell_smm", "thinkpad"]
+        );
+    }
+
+    #[test]
+    fn a_real_thinkpad_fan_wins_over_the_generic_acpi_fan() {
+        // Krackan Point ThinkPad: hwmon6 is acpi_fan reading 0 while the fan
+        // spins at 3978 RPM on hwmon9 (thinkpad).
+        assert_eq!(
+            driver_of(select_fan_sensor(vec![
+                sensor("amdgpu", false),
+                acpi_fan(0),
+                sensor("thinkpad", true),
+            ])),
+            Some("thinkpad".into())
+        );
+    }
+
+    #[test]
+    fn acpi_fan_ranks_last_behind_other_fan_sensors() {
+        assert_eq!(
+            driver_of(select_fan_sensor(vec![
+                acpi_fan(1200),
+                sensor("some_future_ec", true)
+            ])),
+            Some("some_future_ec".into())
+        );
+    }
+
+    #[test]
+    fn a_spinning_acpi_fan_is_used_when_it_is_the_only_candidate() {
+        assert_eq!(
+            driver_of(select_fan_sensor(vec![
+                sensor("amdgpu", false),
+                acpi_fan(2400)
+            ])),
+            Some("acpi_fan".into())
+        );
+    }
+
+    #[test]
+    fn a_stopped_acpi_fan_is_not_reported_when_alone() {
+        // Many laptops expose acpi_fan with an unpopulated tachometer; showing
+        // `fan 0RPM` next to a spinning (or parked-but-real) fan is a lie.
+        assert_eq!(driver_of(select_fan_sensor(vec![acpi_fan(0)])), None);
+    }
+
+    #[test]
+    fn an_unreadable_acpi_fan_is_not_reported_when_alone() {
+        assert_eq!(
+            driver_of(select_fan_sensor(vec![acpi_fan_unreadable()])),
+            None
+        );
     }
 
     #[test]
